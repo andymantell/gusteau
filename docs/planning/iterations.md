@@ -20,11 +20,12 @@ meant to leave the owner with something usable on their own phone.
   backend.
 
 ## Iteration 1 — Recipe suggestions (core loop)
-- Bedrock integration for recipe suggestion generation (general
-  multimodal model, prompt + RAG — see `architecture.md`).
+- Bedrock integration for recipe suggestion generation (general model,
+  prompt + RAG — see `architecture.md`).
 - Time-boxed spike: evaluate a Hugging Face cookery model via Bedrock
   Custom Model Import against the same prompts; keep only if it
-  demonstrably wins (see `decisions.md`).
+  demonstrably wins (see `decisions.md`). Scoped to suggestion
+  generation only, not photo-to-recipe (iteration 3).
 - `Household` / `User` / `WeeklyPlan` / `Suggestion` / `Recipe` data
   model in DynamoDB.
 - "Suggest N recipes for the week" + per-suggestion refresh.
@@ -40,7 +41,10 @@ meant to leave the owner with something usable on their own phone.
 
 ## Iteration 3 — Photo-to-recipe
 - Photo capture (recipe card and food) → S3 → Bedrock multimodal call
-  → structured `Recipe`.
+  → structured `Recipe`. Simple, general-purpose prompt — no cookery
+  specialisation, preference grounding, or RAG needed (see
+  `architecture.md`), so this doesn't depend on iteration 1's LLM
+  spike.
 - Slot into the weekly plan alongside LLM-suggested recipes.
 - **Outcome:** owner can photograph something and get a usable recipe
   back, added to their week.

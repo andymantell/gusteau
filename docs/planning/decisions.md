@@ -79,3 +79,21 @@ the effect of the dismissal itself is household-wide.
 **Why:** confirmed by the owner directly. Also the more internally
 consistent design — a single shared plan can't sensibly have one
 member still seeing a recipe another member has ruled out.
+
+## 2026-08-12 — Photo-to-recipe doesn't need cookery specialisation
+
+**Decided:** photo-to-recipe (recipe card or food photo → structured
+recipe) uses a plain call to the general multimodal Bedrock model with
+a simple extraction prompt — no cookery-specialist system prompt, no
+household preference grounding, no RAG, and it's out of scope for the
+Hugging Face specialist-model spike from iteration 1. See
+`architecture.md`.
+
+**Why:** the owner pointed out that recognising a recipe card is
+essentially OCR, and recreating a recipe from a food photo is general
+visual reasoning plus food world-knowledge any strong frontier model
+already has — neither task benefits from the cookery-specific framing
+that suggestion generation needs. Keeping it as a separate, simpler
+capability avoids over-engineering it and leaves room to move it to a
+cheaper model later if cost matters, independent of the suggestion
+engine's model choice.

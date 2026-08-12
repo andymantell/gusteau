@@ -62,36 +62,40 @@ though CDK will still support it cheaply).
   money (order placed, payment attempted) — treat these as audit
   events, not just debug logs.
 
-## LLM strategy — "specialist cookery LLM"
+## LLM strategy
 
-Bedrock does not offer an off-the-shelf "cookery" foundation model, so
-"specialist" needs to be built rather than picked off a shelf. During
-planning we looked specifically at Hugging Face for existing
-cookery-specialised models, per the owner's request. What's actually
-out there:
+Two genuinely different LLM use cases live in this app, and they don't
+need the same treatment. Splitting them out:
+
+### Recipe suggestion generation — this is where "specialist" matters
+
+This is the part that benefits from cookery-specific framing: it needs
+to reason about substitutions, weigh a household's accumulated
+preferences and dismissal reasons, and produce well-formed, varied
+weekly suggestions. Bedrock doesn't offer an off-the-shelf "cookery"
+foundation model, so "specialist" needs to be built rather than picked
+off a shelf. During planning we looked specifically at Hugging Face
+for existing cookery-specialised models, per the owner's request.
+What's actually out there:
 
 - Small, narrowly fine-tuned recipe generators — e.g. a BLOOM-560M
   fine-tune aimed at diabetic-friendly recipes, a TinyLlama fine-tune
   on ~10K Indian recipes ("CookGPT"), and encoder-only models like
   RecipeBERT (trained on Recipe1M+, good for embeddings/retrieval, not
   generation).
-- All of these are **text-only** and trained on a narrow slice of
-  cuisine or use case. None handle the photo-to-recipe requirement
-  (recipe card or plate of food → recipe), which needs a genuinely
-  multimodal model. None are an obvious drop-in replacement for a
-  frontier general model on quality of open-ended recipe reasoning
-  (substitutions, working from a fuzzy owner preference like "too
-  spicy", inferring a dish from a photo).
+- All of these are **text-only** and narrowly trained. None are an
+  obvious drop-in replacement for a frontier general model on quality
+  of open-ended recipe reasoning (substitutions, working from a fuzzy
+  owner preference like "too spicy").
 
-Given that, the plan is:
+Given that, the plan for suggestion generation is:
 
 1. **Primary path — prompt engineering + retrieval (RAG) on a strong
-   general multimodal model** (e.g. a Claude model on Bedrock): a
-   system prompt encoding cookery expertise and the household's
-   standing preferences/dismissal reasons, grounded in a curated
-   recipe corpus via retrieval, using the same model for the
-   photo-to-recipe feature since it needs vision anyway. Fast to
-   build, easy to iterate, no training pipeline, one model to run.
+   general model** (e.g. a Claude model on Bedrock): a system prompt
+   encoding cookery expertise and the household's standing
+   preferences/dismissal reasons, grounded in a curated recipe corpus
+   via retrieval. Fast to build, easy to iterate, no training
+   pipeline.
 2. **Iteration-1 spike — evaluate a Hugging Face cookery model as a
    supplement**, imported via **Bedrock Custom Model Import** (which
    supports a specific set of open architectures — broadly
@@ -101,11 +105,34 @@ Given that, the plan is:
    in the design — e.g. as a specialised sub-step for a narrow task
    like ingredient substitution — if it demonstrably beats prompt+RAG
    on a general model. Time-boxed; not a hard dependency for iteration
-   1 to ship.
+   1 to ship. **Scoped to suggestion generation only** — see below for
+   why it doesn't apply to the photo feature.
 3. **Fine-tuning our own model** stays as a later option, not pursued
    now — for a single-household tool the effort of maintaining a
    training pipeline is hard to justify unless (1) and (2) both prove
    insufficient.
+
+### Photo-to-recipe — doesn't need a specialist model at all
+
+Recognising a recipe card is essentially structured OCR; recreating a
+recipe from a photo of food is general visual reasoning plus the kind
+of broad food/cooking world-knowledge any strong frontier model
+already has — neither needs cookery-specific fine-tuning, the
+household preference context, or the curated-recipe RAG grounding
+used for suggestions. So this stays deliberately simple:
+
+- A single call to the same general multimodal Bedrock model used for
+  suggestions (no separate model to run, but a distinct, much simpler
+  prompt — just "extract/infer a structured recipe from this image",
+  no cookery-specialist system prompt, no preference grounding, no
+  RAG).
+- Out of scope for the Hugging Face specialist-model spike above —
+  none of those candidates are multimodal anyway, and even if one
+  were, this task doesn't need cookery specialisation to begin with.
+- Possible later optimisation, not a decision now: if cost matters at
+  volume, this call could move to a cheaper/smaller vision-capable
+  model on Bedrock, since it isn't leaning on niche cookery reasoning
+  the way suggestion generation is.
 
 ## Data model (sketch)
 
