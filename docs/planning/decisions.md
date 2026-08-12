@@ -139,3 +139,27 @@ week around known favourites rather than starting from scratch every
 time. Folding it into the existing refresh mechanic (rather than a new
 planning flow) keeps the interaction model simple and reuses machinery
 already being built in iteration 1.
+
+## 2026-08-12 — AWS budget ceiling: £15/month, Lambda-first
+
+**Decided:** target ceiling of **£15/month**, achieved by design
+rather than by monitoring alone. Concretely: Lambda for all compute
+(no EC2, no always-on Fargate/containers), no VPC/NAT Gateway, no
+Application Load Balancer, API Gateway HTTP API, DynamoDB on-demand
+billing, no managed vector/search store, and deliberate attention to
+Bedrock token usage (the one genuinely variable cost) via a lean
+prompt (no large corpus to process, per the earlier "no recipe corpus"
+decision) and a cheaper model tier by default. Full rationale and the
+specific traps being avoided (NAT Gateway and ALB especially) are in
+`architecture.md`, "Cost and frugality." A CloudWatch billing alarm at
+£15 is a day-one (iteration 0) requirement, as a backstop rather than
+the primary control.
+
+**Why:** the owner set the figure directly and asked for frugal
+infrastructure — Lambda over containers/EC2. Conveniently, this lines
+up with decisions already made for other reasons: the assisted-handoff
+ordering posture means no long-lived browser sessions (so no Fargate
+need), and dropping the external recipe corpus means no vector store
+and smaller Bedrock prompts. The main deliberate design discipline
+this adds is avoiding NAT Gateway/ALB, which are the classic ways a
+"serverless" app ends up with a surprise fixed monthly cost.

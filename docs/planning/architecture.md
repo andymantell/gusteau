@@ -39,28 +39,70 @@ though CDK will still support it cheaply).
 - CDK app organised as one stack per bounded concern (network/auth,
   data, suggestion, ordering) so pieces can be deployed/rolled back
   independently.
-- Compute: Lambda for request/response and event-driven work
-  (suggestion generation, ingredient merge); anything that needs a
-  long-lived browser session for retailer checkout will need a
-  container-based option (Fargate task) instead of Lambda — depends on
-  the ordering-automation decision.
+- Compute: **Lambda only** for request/response and event-driven work
+  (suggestion generation, ingredient merge, photo processing). The
+  assisted-handoff ordering posture (`decisions.md`) means nothing
+  needs a long-lived browser session, so there's no Fargate/EC2
+  requirement for MVP — see "Cost and frugality" below. If a retailer
+  ever moves to full automation later, whether that needs
+  container-based compute becomes a fresh cost/benefit call at that
+  point, not assumed now.
 - Storage:
-  - **DynamoDB** for recipes, weekly plans, suggestions, dismissals +
-    reasons, shopping lists, order history.
+  - **DynamoDB**, on-demand billing mode, for recipes, weekly plans,
+    suggestions, dismissals + favourites, shopping lists, order
+    history.
   - **S3** for uploaded photos and any extracted/generated recipe
     images.
-  - **Secrets Manager** for retailer credentials/tokens — never in
-    DynamoDB, never in the app.
+  - **Secrets Manager** — not needed at all for MVP under the
+    assisted-handoff posture (no retailer credentials to store);
+    revisit if/when any retailer moves to full automation.
 - **Bedrock** for:
-  - Recipe suggestion generation (text) — model choice covered in
-    open questions.
+  - Recipe suggestion generation (text) — model choice covered above.
   - Multimodal recipe reconstruction from photos.
-- **Cognito** (or similar) for the single owner's authenticated
-  identity against the API — even single-user apps benefit from not
-  hand-rolling auth.
+- **Cognito** for household/user authenticated identity against the
+  API — free at this scale, and avoids hand-rolling auth.
 - **CloudWatch** for logging/alerting, especially anything that spends
-  money (order placed, payment attempted) — treat these as audit
-  events, not just debug logs.
+  money (order handed off) — treat these as audit events, not just
+  debug logs. Short log retention (e.g. 2 weeks) to keep storage cost
+  negligible.
+
+## Cost and frugality
+
+Budget ceiling: **£15/month**, set by the owner. This is comfortably
+achievable for a single-household tool as long as a few well-known AWS
+cost traps are avoided by design, not caught after the fact:
+
+- **No NAT Gateway, ever.** This is the single most common way a
+  "cheap" serverless app quietly costs £25+/month — a NAT Gateway
+  bills per-hour just for existing, regardless of traffic. Lambdas
+  here don't need VPC placement at all (Bedrock, DynamoDB, S3,
+  Cognito, Secrets Manager are all reached over the AWS SDK without a
+  VPC) — so no VPC, no NAT, full stop, unless a future need
+  (unlikely) genuinely requires putting a Lambda inside a VPC.
+- **No Application Load Balancer.** ALB bills hourly regardless of
+  traffic. API Gateway (HTTP API, not the pricier REST API type) is
+  pay-per-request with no idle cost and is the right fit here.
+- **No EC2, no always-on Fargate/containers.** Lambda's free tier
+  (1M requests + 400,000 GB-seconds/month) comfortably covers a
+  household of one or two using the app a few times a week — this
+  should run at essentially £0 compute cost most months.
+- **DynamoDB on-demand, not provisioned capacity** — provisioned mode
+  bills for capacity whether it's used or not; on-demand matches this
+  app's bursty, low-volume usage pattern and its free tier.
+- **No managed vector/search store** (e.g. OpenSearch) — moot anyway
+  since there's no external recipe corpus to index (see "Grounding
+  data" above), but worth stating as a standing rule: don't introduce
+  one later without a real, evaluated need.
+- **Bedrock is the one genuinely variable cost** — billed per token.
+  Mitigations: no large RAG context to pay to process on every call
+  (already true — see "Grounding data"); default to a cheaper/smaller
+  model tier and only step up to a more capable one where evaluation
+  shows it's actually needed for quality (applies to both suggestion
+  generation and photo-to-recipe); keep prompts and photo resolution
+  no larger than the task needs.
+- **A CloudWatch billing alarm at £15/month is a day-one requirement**
+  (iteration 0), not a nice-to-have — it's the backstop that catches
+  a design mistake before it becomes a surprise bill.
 
 ## LLM strategy
 

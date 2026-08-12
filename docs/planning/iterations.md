@@ -10,14 +10,18 @@ meant to leave the owner with something usable on their own phone.
 - Auth: Cognito user pool, with `Household`/`User` modelled from the
   start (see `architecture.md`) even though only one household and
   one or two users will exist in practice.
-- API Gateway + a "hello world" Lambda, deployed via CDK.
+- API Gateway (HTTP API) + a "hello world" Lambda, deployed via CDK.
+  No VPC — Lambdas call AWS services directly, no NAT Gateway or ALB
+  anywhere in the design. DynamoDB table(s) created on-demand billing.
+  See `architecture.md`, "Cost and frugality."
 - Flutter app skeleton: login against Cognito, one screen calling the
   API.
 - CI: lint/test for both CDK (Python) and Flutter, deploy pipeline
   (manual trigger is fine for a personal project).
-- CloudWatch billing alarm.
+- CloudWatch billing alarm at **£15/month** (see `decisions.md`).
 - **Outcome:** empty app that authenticates and talks to a real
-  backend.
+  backend, on infrastructure that costs close to £0 at this usage
+  level.
 
 ## Iteration 1 — Recipe suggestions (core loop)
 - Bedrock integration for recipe suggestion generation (general model,

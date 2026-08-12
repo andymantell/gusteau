@@ -63,10 +63,11 @@ ingredient-matching problem in §8, which is a separate concern.
 
 ## 7. Budget / AWS cost expectations
 
-Bedrock calls, Fargate (if needed for browser automation), S3/DynamoDB
-are all pay-as-you-go. For a single user this should be cheap, but
-worth the owner setting a rough monthly ceiling and a CloudWatch
-billing alarm as part of iteration 0.
+**Resolved 2026-08-12 — see `decisions.md`.** Ceiling of **£15/month**.
+Achievable by design — Lambda-only compute, no VPC/NAT, no ALB, no
+always-on containers, DynamoDB on-demand — see "Cost and frugality" in
+`architecture.md`. CloudWatch billing alarm at £15 is an iteration 0
+requirement.
 
 ## 8. Ingredient → purchasable product matching
 
