@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  One-time bootstrap for Gusteau's GitHub Actions -> AWS OIDC trust.
+  Deployed by hand, once, from AWS CloudShell — see
+  docs/planning/ci-cd.md, "One-time manual setup". Everything after
+  this is deployed automatically by deploy.yml.
+
+  Creates: the OIDC identity provider for GitHub Actions, and a deploy
+  role that grants ONLY sts:AssumeRole on this account's CDK bootstrap
+  roles — not AdministratorAccess. A compromised workflow run can
+  therefore deploy this app's stack and nothing else.
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: andymantell
+    Description: GitHub organisation or username that owns the repo.
+  GitHubRepo:
+    Type: String
+    Default: gusteau
+    Description: Repository name (without the owner prefix).
+  GitHubEnvironment:
+    Type: String
+    Default: production
+    Description: >
+      GitHub Environment name that deploy.yml targets. Scoping trust to
+      an environment (rather than a branch ref) lets a required
+      reviewer gate deploys from the GitHub mobile app — see
+      docs/planning/ci-cd.md, "Approval from a phone".
+  CdkQualifier:
+    Type: String
+    Default: hnb659fds
+    Description: >
+      CDK bootstrap qualifier. Only change this if `cdk bootstrap` was
+      run with a custom --qualifier — the account is already
+      bootstrapped, so this should match what's there.
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      # AWS validates GitHub's OIDC provider against its own trusted CA
+      # bundle now, not this thumbprint — but the property is still
+      # required by the resource schema. This is DigiCert Global Root
+      # G2, the root actions.githubusercontent.com chains to; roots
+      # are stable for years, unlike the leaf/intermediate certs GitHub
+      # has previously rotated.
+      ThumbprintList:
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: gusteau-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:environment:${GitHubEnvironment}"
+      Policies:
+        - PolicyName: assume-cdk-bootstrap-roles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: AssumeCdkBootstrapRoles
+                Effect: Allow
+                Action: sts:AssumeRole
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-deploy-role-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-image-publishing-role-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-lookup-role-${AWS::AccountId}-${AWS::Region}"
+      Tags:
+        - Key: project
+          Value: gusteau
+
+Outputs:
+  DeployRoleArn:
+    Description: >
+      Paste this into the GitHub repo as the AWS_DEPLOY_ROLE_ARN
+      variable (Settings -> Secrets and variables -> Actions -> Variables).
+    Value: !GetAtt GitHubDeployRole.Arn
