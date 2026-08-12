@@ -25,6 +25,9 @@ open questions in `risks-and-open-questions.md` are resolved.
     weeknight"). Reasons are structured/stored so they can be fed back
     into future LLM prompts as standing preferences, not just used to
     filter a blocklist.
+  - Both kinds of dismissal apply to the whole household, not just
+    the member who dismissed it — see `decisions.md`. Who dismissed
+    it and why is still recorded.
 
 ## Recipe capture from a photo
 
@@ -65,8 +68,8 @@ open questions in `risks-and-open-questions.md` are resolved.
   the start, not hard-coded to a single owner — see `decisions.md`.
   In practice this will likely only ever run for one household.
 - No public sign-up flow; this stays a personal tool.
-- Open: whether a weekly plan and permanent dismissals are shared
-  household-wide or per-member — see `risks-and-open-questions.md` §4.
+- One shared weekly plan per household; dismissals (temporary or
+  permanent) apply household-wide — see `decisions.md`.
 
 ## Security
 

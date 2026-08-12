@@ -122,16 +122,17 @@ in practice. Every entity below that isn't global hangs off a
   manual), tags (cuisine, time, difficulty). Recipes themselves are
   not household-scoped — they're shared, reusable content.
 - `WeeklyPlan` — household id, week id, list of `Suggestion` slots (N
-  per week). **Working assumption:** one shared plan per household,
-  not one per member — flagged as an open question in
-  `risks-and-open-questions.md` §4 to confirm.
+  per week). One shared plan per household, not one per member.
 - `Suggestion` — slot id, current `Recipe`, refresh history, status
   (pending / accepted / dismissed-temporary / dismissed-permanent).
-- `Dismissal` — household id, user id (who dismissed it), recipe id,
-  type (temporary/permanent), scope (this member only / whole
-  household — see open question), reason (free text + optional
-  structured category), timestamp. Permanent dismissals feed back into
-  future suggestion prompts for whichever scope applies.
+- `Dismissal` — household id, user id (who dismissed it, kept for
+  attribution and for reason context), recipe id, type
+  (temporary/permanent), reason (free text + optional structured
+  category), timestamp. Effect is always household-wide — a dismissal
+  removes the recipe from the shared plan (temporary: this week only;
+  permanent: from all future suggestions) regardless of which member
+  triggered it. Permanent dismissals feed back into future suggestion
+  prompts for the household as a whole.
 - `ShoppingList` — household id, week id, merged ingredient lines
   (name, quantity, unit, source recipes), purchasable-quantity
   rounding applied.
@@ -143,8 +144,8 @@ in practice. Every entity below that isn't global hangs off a
 
 Suggestion generation reads every household member's active
 preferences and dismissal history and pools them into the prompt/RAG
-context for that household's plan, rather than personalising per
-member — consistent with the single-shared-plan assumption above.
+context for that household's single shared plan, rather than
+personalising per member.
 
 ## Security posture (headline, detail in open-questions doc)
 

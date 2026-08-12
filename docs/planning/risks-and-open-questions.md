@@ -34,16 +34,10 @@ supplement — kept only if it demonstrably wins.
 `User` as first-class from the start, even though it'll likely only
 ever run for a household of one.
 
-**Follow-on question this raises, still open:** is a `WeeklyPlan` a
-single shared plan for the whole household (one set of N meals
-everyone eats, like a Gousto box), or does each member get their own
-plan? The brief as written ("suggest N recipes each week... I choose")
-reads like a single shared household plan with preferences pooled
-from all members, which is the working assumption for the data model
-in `architecture.md` — flagging here so it's an explicit assumption
-to confirm, not a silent one. Also open: for a *permanent* dismissal,
-does it apply household-wide (nobody gets that recipe again) or only
-to the member who dismissed it?
+**Follow-on question this raised — resolved 2026-08-12, see
+`decisions.md`.** A `WeeklyPlan` is a single shared plan for the whole
+household, and dismissing a recipe (temporary or permanent) removes it
+for everyone, not just the member who dismissed it.
 
 ## 5. Payment mechanics, concretely
 

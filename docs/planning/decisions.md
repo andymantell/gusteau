@@ -65,6 +65,17 @@ assumption into the data model or auth.
 
 **Why:** cheap to do correctly now, expensive to retrofit later, and
 the owner wants the option open even if it's never released.
-Raises a follow-on open question — see `risks-and-open-questions.md`
-— about whether a weekly plan is one shared plan for the whole
-household or one per member; captured there rather than assumed.
+
+## 2026-08-12 — Weekly plan and dismissal scope
+
+**Decided:** a `WeeklyPlan` is a single shared plan for the whole
+household (one set of N meals, not one per member), and dismissing a
+recipe — temporary or permanent — removes it for the whole household,
+not just the member who dismissed it. The dismissing member and their
+reason are still recorded (for feeding back into future suggestion
+prompts and so the household knows who dismissed what and why), but
+the effect of the dismissal itself is household-wide.
+
+**Why:** confirmed by the owner directly. Also the more internally
+consistent design — a single shared plan can't sensibly have one
+member still seeing a recipe another member has ruled out.
