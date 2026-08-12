@@ -1,10 +1,10 @@
 # Requirements
 
-Captured from the initial brief on 2026-08-12. This is the raw feature
-list, lightly organised. It will grow as the owner thinks of more.
-Each item is tagged `[MVP]`, `[later]`, or `[open]` (needs a decision
-before it can be tagged either way) — tags will be filled in once the
-open questions in `risks-and-open-questions.md` are resolved.
+Captured from the initial brief on 2026-08-12 and updated as planning
+decisions land. It will grow as the owner thinks of more. What's in
+scope for MVP versus later is expressed by the build order in
+`iterations.md` (iterations 0–6 are the MVP; the backlog section is
+"later") rather than by per-item tags here.
 
 ## Platform / stack (given, not negotiable)
 
@@ -102,12 +102,14 @@ open questions in `risks-and-open-questions.md` are resolved.
 ## Security
 
 - Called out explicitly as a top priority because a real debit card
-  and real supermarket accounts are involved. Concrete requirements
-  are being worked out in `risks-and-open-questions.md` and will land
-  here once agreed — expect items like: no raw card data ever stored
-  by Gusteau, retailer credentials in a managed secret store, app-level
-  auth/biometric gate, encrypted transport and storage, least-privilege
-  IAM, audit logging of anything that spends money.
+  and real supermarket accounts are involved.
+- Under the assisted-handoff posture, MVP Gusteau holds **no card data
+  and no retailer credentials at all** — payment and retailer login
+  only ever happen on the retailer's own app/site. Standing hard
+  rules (never store card data; credentials only ever in a managed
+  secret store, and only if automation is ever added; biometric gate;
+  least-privilege IAM; audit logging of money-adjacent events) are
+  specified in `architecture.md`, "Security posture."
 
 ## Not yet specified (owner to flesh out over time)
 

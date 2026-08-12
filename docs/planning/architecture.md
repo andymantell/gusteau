@@ -7,16 +7,16 @@ resolved. Nothing here is built yet.
 
 ```
 Flutter app (Android)
-    │  HTTPS (mTLS/OIDC, see security notes)
+    │  HTTPS (Cognito-authenticated)
     ▼
-API layer (API Gateway + Lambda, or ECS Fargate — TBD by iteration 0)
+API layer (API Gateway HTTP API + Lambda)
     │
     ├── Recipe Suggestion Service  ── Bedrock (LLM) ── Recipe history store
-    ├── Preferences Service        ── DynamoDB (dismissals, reasons, likes)
+    ├── Preferences Service        ── DynamoDB (dismissals, reasons, favourites)
     ├── Photo Recognition Service  ── Bedrock (multimodal) ── S3 (photos)
     ├── Shopping List Service      ── ingredient normalisation/merge logic
-    ├── Price Comparison Service   ── per-retailer adapters
-    └── Ordering Service           ── per-retailer adapters ── Secrets Manager
+    ├── Price Comparison Service   ── per-retailer adapters (read-only)
+    └── Ordering Service           ── basket handoff per retailer
 ```
 
 Everything sits in the owner's own AWS account, single environment to
@@ -29,16 +29,16 @@ though CDK will still support it cheaply).
   never directly to a supermarket. Keeps all secrets and retailer
   sessions server-side.
 - Local device auth (biometric/PIN) gates opening the app, on top of
-  backend auth — see `risks-and-open-questions.md` for the auth
-  mechanism decision.
+  Cognito auth against the backend.
 - Camera capture for recipe cards / food photos, upload to backend for
   processing (not on-device inference).
 
 ## Backend — AWS, CDK (Python)
 
-- CDK app organised as one stack per bounded concern (network/auth,
-  data, suggestion, ordering) so pieces can be deployed/rolled back
-  independently.
+- CDK app organised as one stack per bounded concern (auth, data,
+  suggestion, ordering) so pieces can be deployed/rolled back
+  independently. No network stack — there is no VPC (see "Cost and
+  frugality").
 - Compute: **Lambda only** for request/response and event-driven work
   (suggestion generation, ingredient merge, photo processing). The
   assisted-handoff ordering posture (`decisions.md`) means nothing
@@ -291,8 +291,9 @@ in practice. Every entity below that isn't global hangs off a
 - `WeeklyPlan` — household id, week id, list of `Suggestion` slots (N
   per week). One shared plan per household, not one per member.
 - `Suggestion` — slot id, current `Recipe`, `filled_via`
-  (llm-suggestion / favourite-pick), refresh history, status
-  (pending / accepted / dismissed-temporary / dismissed-permanent).
+  (llm-suggestion / favourite-pick / photo-capture / manual-pick),
+  refresh history, status (pending / accepted / dismissed-temporary /
+  dismissed-permanent).
 - `Dismissal` — household id, user id (who dismissed it, kept for
   attribution and for reason context), recipe id, type
   (temporary/permanent), reason (free text + optional structured
@@ -312,24 +313,44 @@ in practice. Every entity below that isn't global hangs off a
 - `BasketQuote` — household id, retailer, shopping list id, line-item
   matches, total price, availability/substitution notes, fetched-at
   timestamp.
-- `Order` — household id, retailer, basket snapshot, delivery slot,
-  status (quoted / slot-reserved / placed / failed), audit trail.
+- `Order` — household id, retailer, basket snapshot, delivery slot
+  (recorded by the owner post-handoff), status (quoted → handed-off →
+  confirmed, plus abandoned). If full checkout automation is ever
+  added for a retailer, this gains the slot-reserved/placed/failed
+  states that flow would need — not modelled until then.
 
 Suggestion generation reads every household member's active
-preferences and dismissal history and pools them into the prompt/RAG
+preferences and dismissal history and pools them into the prompt
 context for that household's single shared plan, rather than
 personalising per member.
 
-## Security posture (headline, detail in open-questions doc)
+Dismissals, favourites, and accepted-recipe history are the app's
+accumulating value — losing them means the suggestion engine forgets
+everything it has learned. DynamoDB point-in-time recovery is cheap at
+this scale and should be on from iteration 1.
 
-- Gusteau **never stores raw card details**. Payment rides on whatever
-  the retailer already has saved against the owner's account there;
-  Gusteau's job is to build the basket and drive checkout up to the
-  point the retailer's own (already-tokenised) payment method is used.
-- Retailer credentials stored only in Secrets Manager, accessed only
-  by the Ordering Service's execution role.
-- All traffic TLS; API requires authenticated owner identity; anything
-  that places an order or reserves a slot is logged as an auditable,
-  money-moving event.
-- Least-privilege IAM per Lambda/service — the Recipe Suggestion
-  service, for instance, has no access to Secrets Manager at all.
+## Security posture
+
+The assisted-handoff decision (`decisions.md`) makes the MVP security
+story unusually strong: **Gusteau holds no card data and no retailer
+credentials at all**, because payment and login only ever happen on
+the retailer's own app/site. The rules below are stated as standing
+policy anyway, so they survive any future move toward automation:
+
+- Gusteau **never asks for, stores, or transmits raw card details** —
+  hard rule, never revisited under convenience pressure. If checkout
+  is ever automated for a retailer, payment rides entirely on the
+  payment method already saved on the owner's account with that
+  retailer.
+- **No retailer credentials in MVP.** If full automation is ever added
+  for a retailer, its credentials go in Secrets Manager, readable only
+  by the Ordering Service's execution role — and that expansion gets
+  its own security review before it ships.
+- All traffic TLS; every API route requires an authenticated Cognito
+  identity; local biometric/PIN gate on the app itself.
+- Anything money-adjacent (basket handed off, order confirmed) is
+  logged as an auditable event with who/what/when — not just debug
+  logs.
+- Least-privilege IAM per Lambda: the suggestion service can call
+  Bedrock and read preference data, nothing else; the photo service
+  can read its S3 prefix, nothing else; and so on.

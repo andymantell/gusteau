@@ -1,9 +1,11 @@
-# Iterations (draft build order)
+# Iterations (build order)
 
-Draft only — sizing and even ordering may change once the open
-questions are resolved, especially the ordering-automation posture,
-which determines how big iterations 5/6 really are. Each iteration is
-meant to leave the owner with something usable on their own phone.
+Each iteration leaves the owner with something usable on their own
+phone. The planning decisions shaping this order are in
+`decisions.md`. The one big sizing unknown left is iteration 5 —
+retailer product/price data access (`risks-and-open-questions.md` §9)
+— which has a feasibility spike scheduled ahead of it and does not
+block anything before it.
 
 ## Iteration 0 — Foundations
 - CDK app skeleton (Python), bootstrapped in the owner's AWS account.
@@ -75,22 +77,35 @@ meant to leave the owner with something usable on their own phone.
 - **Outcome:** one clean shopping list per week instead of per-recipe
   lists.
 
-## Iteration 5 — Price comparison
+## Iteration 5 — Price comparison *(highest-risk iteration — gated on a spike)*
+- **Gate: the product/price data feasibility spike from
+  `risks-and-open-questions.md` §9 runs first** (it can start any time
+  from iteration 4 onwards) — it decides per retailer whether data
+  comes from an aggregator API, an unofficial API, scraping, or not at
+  all, and therefore what this iteration actually builds.
 - Retailer adapters (read-only): match shopping list items to
-  retailer catalog/products, compute basket totals, for Tesco,
-  Sainsbury's, Asda, and Waitrose.
-- Spike: check feasibility of Amazon.co.uk's grocery partnerships
-  (Morrisons/Co-op/Iceland + Amazon's own range) as a fifth channel;
-  add an adapter if it stacks up, otherwise note why not and move on.
-- Flutter: side-by-side basket comparison, owner picks one.
-- **Outcome:** owner sees real comparative pricing before committing.
+  retailer catalog/products, compute basket totals, for whichever of
+  Tesco, Sainsbury's, Asda, and Waitrose the spike shows are viable.
+- Spike (part of the same investigation): Amazon.co.uk's grocery
+  partnerships (Morrisons/Co-op/Iceland + Amazon's own range) as a
+  fifth channel; add an adapter if it stacks up, otherwise note why
+  not and move on.
+- Flutter: side-by-side basket comparison, owner picks one. Degraded
+  modes (fewer retailers, cached or clearly-labelled estimated
+  prices) are acceptable outcomes — see §9.
+- **Outcome:** owner sees comparative pricing before committing — as
+  real as retailer data access allows.
 
 ## Iteration 6 — Slot reservation and order placement (assisted)
 - Assisted handoff per the phased posture decided in
   `decisions.md`: Gusteau prepares the chosen retailer's basket
-  contents and hands off (deep link and/or a clear checklist) for the
-  owner to reserve the slot and pay themselves on the retailer's own
-  app/site.
+  contents and hands off for the owner to reserve the slot and pay
+  themselves on the retailer's own app/site. Expectation check: UK
+  retailer apps generally can't be deep-linked into a pre-filled
+  basket, so the realistic baseline is a fast, well-ordered checklist
+  (grouped to match the retailer's search, one-tap copy per item)
+  used alongside the retailer's app — with per-retailer deep-linking
+  investigated as an enhancement, not assumed.
 - Order/basket state tracked in Gusteau (`Order` status: quoted →
   handed-off → confirmed) so history is still useful even without full
   automation.

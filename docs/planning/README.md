@@ -25,11 +25,16 @@ plan is marked ready and the owner says go — see [status](#status) below.
 
 ## Status
 
-**Planning — draft 1.** Requirements captured from the initial brief.
-Key open questions (supermarket automation approach, target retailers,
-LLM strategy, household scope) are not yet resolved — see
-`risks-and-open-questions.md`. Nothing should be built until this doc
-says "ready to implement" and the owner confirms.
+**Planning — reviewed, one open risk.** All the originally-open
+decisions are resolved (see `decisions.md`: assisted-first ordering,
+retailer set, LLM strategy with an upfront validation spike, no
+recipe corpus, multi-household data model, household-wide dismissals
+and favourites, £15/month Lambda-first budget). A full plan review on
+2026-08-12 fixed internal inconsistencies and surfaced the one
+remaining substantive unknown: **where retailer product/price data
+comes from** (`risks-and-open-questions.md` §9) — it gates iteration
+5 only, and has a feasibility spike scheduled ahead of it. Nothing
+gets built until the owner says go.
 
 ## Ground rules for this plan
 
