@@ -191,8 +191,22 @@ Fast feedback, no credentials needed, so it runs safely on any PR.
   real check — it proves the CDK app compiles and produces a valid
   template without touching AWS.
 - **app job:** `flutter analyze`, `flutter test`, and a **debug** APK
-  build to prove compilation. Not published. Flutter SDK installed by
-  the cached bash step, not a third-party action.
+  build, uploaded via `actions/upload-artifact`. Flutter SDK installed
+  by the cached bash step, not a third-party action.
+
+**The debug artifact is deliberately load-bearing early on.** UX is
+being designed by building it and reacting to it rather than by
+specifying it upfront (see `decisions.md`), so there has to be a way
+to get a build onto the phone from day one. A debug APK is signed with
+Flutter's auto-generated debug key, so this path needs **no keystore,
+no AWS, no OIDC, no secrets whatsoever** — just download from the
+Actions run page and install. That decouples the two pipelines: screen
+and database work can proceed while the one-time AWS console step
+waits for a PC.
+
+Caveat to handle while the database is still empty: debug and release
+builds have different signing identities, so moving to signed releases
+means uninstalling the debug build first.
 - Runs both in parallel; caches pip, pub and Gradle.
 - No `id-token` permission, no secrets — deliberately, so a PR can
   never reach AWS.

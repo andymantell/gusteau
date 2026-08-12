@@ -653,3 +653,25 @@ will fire and should say so plainly. On testing: the model's output
 quality isn't something CI can meaningfully assert, and trying makes
 builds flaky and costly. The bugs that actually matter live in the
 arithmetic around the model, which is fully deterministic.
+
+## 2026-08-12 — UX is designed by building, not by specifying
+
+**Decided:** no upfront UX document — no screen inventory, no flow
+diagrams, no wireframes. Screens get built and the owner reacts to the
+running app. To make that work from a phone, `ci.yml` uploads the
+**debug APK as a run artifact** from the very first build: debug
+builds use Flutter's auto-generated key, so this needs no keystore, no
+AWS, no OIDC and no secrets.
+
+**Why:** the owner's preference, and the better loop. A screen
+inventory asks someone to have an opinion about a description of an
+interface; an installed build asks them to have an opinion about the
+interface. The second produces better feedback and skips a translation
+step. It also happens to decouple the pipelines usefully — the APK
+path depends on nothing in AWS, so UI and local-database work can run
+ahead of the one-time AWS console bootstrap.
+
+**Consequence:** the plan is deliberately silent on UI, and stays
+silent. Screens are not going to be back-specified into the docs after
+the fact; `requirements.md` describes behaviour and the app itself
+describes its interface.

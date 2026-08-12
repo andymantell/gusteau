@@ -22,7 +22,9 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
   including the OIDC exchange, so no third-party code sits between the
   token and the AWS account (see `ci-cd.md`).
 - **`ci.yml`** — lint, test and `cdk synth` on every PR; no secrets,
-  no AWS access.
+  no AWS access. **Uploads the debug APK as a run artifact**, which is
+  how UI review happens from the phone before signing or AWS exist
+  (see `ci-cd.md`).
 - **`deploy.yml`** — OIDC-authenticated `cdk diff` + `cdk deploy`, no
   stored AWS credentials, gated behind a `production` environment so
   it can be approved from the GitHub mobile app.
