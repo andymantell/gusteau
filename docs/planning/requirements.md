@@ -71,6 +71,12 @@ scope for MVP versus later is expressed by the build order in
   deleted**, and rules can be **added by hand** without a dismissal to
   prompt them. Disabling is distinct from deleting — useful for
   testing whether a rule is making suggestions worse.
+- Hand-added rules are also how **dietary constraints** are expressed
+  ("vegetarian on Mondays", "no shellfish") — deliberately not a
+  separate feature. Note these are *prompt instructions*, so they're
+  strong preferences rather than guaranteed filters; if a hard
+  guarantee is ever needed (a genuine allergy, say), that would want
+  post-generation checking rather than trusting the prompt alone.
 - The **assembled prompt is viewable** in full, so a claim that a rule
   is being applied can actually be checked.
 - Reasons are stored **verbatim** — no silent LLM rewording of what
@@ -219,7 +225,9 @@ after, once the core concept is stable. See `decisions.md`.
 
 ## Not yet specified (owner to flesh out over time)
 
-- Nutrition tracking / dietary constraints (allergies, macros, calories).
+- Nutrition tracking (macros, calories). *Dietary constraints are not
+  a separate feature — see "The personalised prompt" above; a
+  hand-added preference rule covers it.*
 - Meal history / repeats — how often the same recipe is allowed to
   reappear.
 - Notifications (e.g. "your basket is ready to review", "slot booked").
