@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Only ever used for calling the inference proxy — see
+         docs/planning/architecture.md, "Client — Flutter (Android)". -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="gusteau"
         android:name="${applicationName}"
