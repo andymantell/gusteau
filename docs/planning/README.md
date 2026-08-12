@@ -13,7 +13,8 @@ replacing Gousto/HelloFresh-style subscription boxes with a system that:
 
 It is **local-first**: the phone holds the database and does the work,
 and AWS is called only for what a phone can't do — LLM inference.
-There is no cloud copy of your recipes, preferences, or photos.
+There is no cloud copy of your recipes, preferences, or photos, and
+durability comes from Android Auto Backup to your own Google account.
 
 Comparing basket prices across several supermarkets is a post-v1
 enhancement — v1 goes end-to-end against Sainsbury's alone.

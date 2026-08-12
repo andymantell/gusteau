@@ -400,3 +400,44 @@ granting nothing but "relay a prompt to Bedrock", by the usage-plan
 quota capping what a leaked key could cost, and by being trivially
 rotatable. Cognito remains the fallback if proper token rotation is
 ever wanted.
+
+## 2026-08-12 — Android Auto Backup is the durability answer
+
+**Decided:** rely on **Android Auto Backup** as the primary protection
+against device loss. App data goes to the owner's Google account and
+restores automatically onto a new phone, so the data is tied to the
+account rather than the handset — device loss is no longer data loss.
+The JSON export stays, but demoted from primary mitigation to escape
+hatch (Google-account loss, portability, inspection, app abandonment),
+and can therefore sit later in the build order.
+
+Because Auto Backup fails *silently* when misconfigured, iteration 0
+must do it properly rather than switch it on and hope:
+
+- a `BackupAgent` that **checkpoints the SQLite WAL** before backup,
+  with `-wal`/`-shm` excluded, so the restored database isn't stale or
+  corrupt;
+- **explicit** `dataExtractionRules` / `fullBackupContent` rather than
+  relying on default behaviour;
+- **photos excluded**, because they would consume the 25MB per-app
+  quota that the rest of the data needs;
+- an **actual install-and-restore test on a clean device**, repeated
+  when the schema changes materially.
+
+See `architecture.md`, "Backup and durability".
+
+**Why:** the owner's suggestion, and it's right — Auto Backup is
+purpose-built for exactly this and costs nothing. It also turns out
+not to compromise the privacy stance that motivated local-first: since
+Android 9, backups are encrypted with a key derived from the device
+passcode, so Google can't read the contents. The reason this gets a
+decision entry rather than a one-line note is that the WAL problem is
+a genuine trap — Drift and sqflite use WAL mode by default, and a
+backup taken without checkpointing restores quietly wrong, which is
+the worst possible failure mode for a backup.
+
+**Residual risks accepted:** durability now depends on the Google
+account staying accessible (the JSON export exists for that case); up
+to ~24h of recent changes may be unbacked, since Auto Backup runs
+roughly daily on charge/idle/Wi-Fi; and original photos aren't
+restored, only the recipes extracted from them.

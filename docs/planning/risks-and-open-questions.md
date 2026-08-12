@@ -149,29 +149,43 @@ to trip bot protection than AWS IP ranges — a real point in favour of
 on-device fetching. Against it, parsing logic on the device can only
 be fixed by shipping a build. The spike should evaluate both.
 
-## 10. Device loss = data loss *(open — accepted, needs mitigation)*
+## 10. Device loss *(largely resolved — Android Auto Backup, with caveats to implement)*
 
-Local-first puts the accumulated favourites, dismissal reasons,
-preference rules and ingredient preferences on the handset. That data
-*is* the product's value — a year of learned preferences is not
-reconstructible — and there is no server-side copy to restore from.
+**Resolved in principle 2026-08-12 — see `decisions.md`.** Android
+Auto Backup ties app data to the owner's Google account, so device
+loss is not data loss: a new phone restores the database during setup.
+It's also encrypted with a key derived from the device passcode
+(Android 9+), so it doesn't undo the privacy property local-first was
+chosen for.
 
-Mitigation ladder, cheapest first:
+That downgrades this from the sharpest edge in the design to a set of
+implementation details that must not be skipped. Full treatment in
+`architecture.md`, "Backup and durability". The ones that can fail
+silently:
 
-- **Android auto-backup**, on from iteration 1. Nearly free, but
-  worth verifying it actually captures the app database rather than
-  assuming it does.
-- **Manual JSON export/import** the owner can run any time and store
-  wherever they like. Also doubles as the migration path to a new
-  phone and as an escape hatch if the app is ever abandoned. Note the
-  export is plaintext.
-- **Optional encrypted cloud backup**, post-v1, if local-only ever
-  feels too thin. This is the same machinery sync would need (§11),
-  so the two are worth designing together rather than separately.
+- **SQLite WAL consistency.** Backing up the main DB file without a
+  consistent `-wal` sidecar yields a stale or corrupt restore, with no
+  error at backup time. Needs a WAL checkpoint before backup and
+  explicit exclusion of `-wal`/`-shm`. **This is the one most likely
+  to be discovered too late.**
+- **25MB per-app quota**, silently truncating anything larger. Drives
+  the decision to exclude photos from backup.
+- **Never-tested restore.** Iteration 0 includes an actual
+  install-and-restore test on a clean device, repeated when the schema
+  changes.
 
-Open question: is auto-backup plus manual export enough for the
-owner's comfort, or should backup be designed in earlier? Cheap to
-decide once the app is in real use and the data actually matters.
+**Residual risks, accepted:**
+
+- Durability now depends on the owner's Google account remaining
+  accessible — account loss or lockout means losing the data. The JSON
+  export is the escape hatch for exactly this, which is why it stays
+  in the plan even though Auto Backup carries the main load.
+- Up to ~24 hours of recent changes may be unbacked, since Auto Backup
+  runs roughly daily on charge/idle/Wi-Fi. Immaterial for weekly meal
+  planning.
+- Original photos are not restored (excluded by the quota decision).
+  The extracted recipes are, which is the part that matters — worth
+  saying in the UI rather than letting the owner find out.
 
 ## 11. Multi-user and sync
 

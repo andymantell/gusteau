@@ -14,8 +14,12 @@ four.
 - Flutter app skeleton with the **local SQLite layer** (Drift or
   equivalent) and migration tooling — this is the system of record, so
   it gets set up properly on day one.
-- Android auto-backup enabled and **verified to actually capture the
-  app database** (see `risks-and-open-questions.md` §10).
+- **Android Auto Backup, configured properly** — explicit
+  `dataExtractionRules`/`fullBackupContent`, a `BackupAgent` that
+  checkpoints the SQLite WAL before backup, `-wal`/`-shm` excluded,
+  photos excluded from the 25MB quota. Then an **actual
+  install-and-restore test on a clean device** to prove it works, not
+  assume it (see `architecture.md`, "Backup and durability").
 - CDK app skeleton (Python): API Gateway HTTP API with an API key and
   usage plan, plus the **inference proxy Lambda** — no VPC, no NAT, no
   ALB, no data stores, no Cognito. See `architecture.md`.
@@ -88,6 +92,9 @@ four.
   general-purpose prompt — no cookery specialisation or preference
   grounding needed (see `architecture.md`), so this doesn't depend on
   iteration 1's LLM spike.
+- Photos written to a backup-excluded directory (the 25MB Auto Backup
+  quota won't take them), with the UI saying plainly that a restored
+  install keeps the recipes but not the original snapshots.
 - Slot into the weekly plan alongside LLM-suggested recipes.
 - **Outcome:** owner can photograph something and get a usable recipe
   back, added to their week.
@@ -113,9 +120,9 @@ All on-device — this iteration adds no AWS resources.
   a collapsed "assumed you already have these" section for skipped
   staples. Editable list screens for `IngredientPreference` and
   `PantryStaple`, per the no-hidden-learned-state principle.
-- JSON export/import of the local database (`risks-and-open-questions.md`
-  §10) — by this point there's accumulated data genuinely worth not
-  losing.
+- JSON export/import of the local database — the escape hatch for
+  Google-account loss and data portability, now that Auto Backup
+  carries the main durability load (`risks-and-open-questions.md` §10).
 - **Outcome:** one clean shopping list per week instead of per-recipe
   lists; the app stops asking about mince after the first time, and
   stops trying to sell you olive oil you already have.
@@ -161,9 +168,6 @@ weekly. Known candidates, roughly in the order they seem worth doing:
   retailer, and like-for-like matching (already designed for: see
   `architecture.md`, "Ingredient specificity and product
   preferences").
-- **Encrypted cloud backup**, if local-only ever feels too thin
-  (`risks-and-open-questions.md` §10). Would need squaring with the
-  no-cloud-data privacy property local-first just bought.
 - **Fully automated checkout** for a specific retailer, if ever wanted
   — separately scoped, with its own security review (`decisions.md`).
 - From the "not yet specified" list in `requirements.md`: nutrition

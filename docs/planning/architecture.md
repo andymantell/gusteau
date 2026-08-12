@@ -69,14 +69,10 @@ accounts. The cloud sees a prompt and returns a completion.
 
 ### What it costs — and the mitigations
 
-- **Device loss = data loss.** The accumulated favourites, dismissal
-  reasons and preference rules *are* the product's value, and with no
-  account behind them there is nothing to restore from. Mitigations,
-  in iteration order: Android auto-backup on from day one; explicit
-  JSON export/import the owner can run any time and stash wherever
-  they like; optional encrypted cloud backup as a post-v1 addition if
-  the local-only story ever feels too thin. This is the single
-  sharpest edge of the design — tracked in
+- **Device loss** is handled by Android Auto Backup to the owner's
+  Google account, which covers app databases and restores on a new
+  phone — but it has specific requirements that have to be designed
+  for, not assumed. See "Backup and durability" below and
   `risks-and-open-questions.md` §10.
 - **A second device is a second, separate install** with its own data.
   Accepted deliberately (see `decisions.md`); moving phones is an
@@ -103,7 +99,9 @@ The app is the whole product; everything below runs on the handset.
 - **Photos stay on the device.** Captured images are resized and
   compressed locally, then sent as part of the inference request —
   never stored in the cloud. Resizing is needed anyway to keep vision
-  token costs and request payloads down.
+  token costs and request payloads down. They're excluded from backup
+  (see "Backup and durability"), so they live in a directory chosen
+  with that in mind.
 - **Talks to AWS only for inference** (and possibly retailer product
   data — see below). Never holds AWS credentials directly; never talks
   to Bedrock without going through the proxy.
@@ -111,6 +109,66 @@ The app is the whole product; everything below runs on the handset.
   the data now living on the handset rather than in a cloud account,
   this is the primary protection for it, not a secondary nicety — see
   "Security posture".
+
+## Backup and durability
+
+**Android Auto Backup is the primary answer to device loss**, and it's
+a good one: app data goes to the owner's Google account, restores
+automatically when the app is installed on a new phone during setup,
+doesn't count against Drive quota, and — since Android 9 — is
+encrypted with a key derived from the device passcode, so Google
+cannot read it. That last point matters here: it preserves the
+privacy property local-first was chosen for. Data is tied to the
+Google account rather than the handset, so losing the phone is not
+losing the data.
+
+It is not automatic in the sense of "ignore it and it'll be fine",
+though. Four things have to be right, and the first is the one that
+silently bites:
+
+- **SQLite WAL files must be handled.** Auto Backup copies the
+  database file, but SQLite in WAL mode (which Drift and sqflite use
+  by default) keeps recent commits in a separate `-wal` sidecar. Back
+  up the main file without a matching, consistent `-wal` and the
+  restore is stale or corrupt — and it fails *quietly*, which is the
+  worst property a backup can have. The fix is to force a WAL
+  checkpoint before backup runs, via a `BackupAgent` hook, and exclude
+  the `-wal`/`-shm` files from the backup set so only the checkpointed
+  main database is captured. **This is the single most important
+  implementation detail in this section.**
+- **The 25MB per-app quota.** Anything above it is silently not backed
+  up. The database itself will stay far below that — text recipes are
+  tiny — but **captured photos would blow through it quickly**, so
+  photos are excluded from backup (see below).
+- **Explicit backup rules, not defaults.** Declare what's included via
+  `dataExtractionRules` (Android 12+) with the legacy
+  `fullBackupContent` for older versions, rather than relying on
+  implicit behaviour. Being explicit is what makes the WAL exclusion
+  and photo exclusion enforceable.
+- **A real restore test.** Backup that has never been restored is a
+  hypothesis. Iteration 0 includes actually installing onto a clean
+  device/emulator and confirming the data comes back intact — and
+  repeating that whenever the schema changes materially.
+
+**Photos are deliberately excluded from backup.** They'd consume the
+whole quota, and they're the least valuable thing stored: the
+*extracted recipe* is what matters, and it's already saved as a
+`Recipe` in the database. A restored install therefore comes back with
+every recipe, favourite and preference intact, minus the original
+snapshots — an acceptable trade, and one to state in the UI rather
+than let the owner discover.
+
+**Timing caveat:** Auto Backup runs roughly daily, and only when the
+device is idle, charging and on unmetered Wi-Fi. So the exposure
+window is up to about a day of recent changes. For weekly meal
+planning that's immaterial.
+
+**JSON export/import remains**, with its justification changed. It's
+no longer the primary durability mechanism — it's the escape hatch:
+Google-account loss or lockout, moving the data somewhere else,
+inspecting it, or the app being abandoned. Worth keeping for a
+personal tool the owner wants to stay in control of, but it can sit
+later in the build order now that Auto Backup carries the main load.
 
 ## Backend — AWS, CDK (Python)
 
@@ -657,10 +715,11 @@ scoping or merging to do — there is only one set of preferences.
 
 Dismissals, favourites, preference rules and accepted-recipe history
 are the app's accumulating value — losing them means the suggestion
-engine forgets everything it has learned, with no account to restore
-from. Durability is therefore a device-backup problem: Android
-auto-backup enabled from iteration 0, plus a manual JSON
-export/import. See `risks-and-open-questions.md` §10.
+engine forgets everything it has learned. Durability comes from
+Android Auto Backup to the owner's Google account, with a WAL
+checkpoint so the database is captured consistently, plus a JSON
+export as an escape hatch. See "Backup and durability" above and
+`risks-and-open-questions.md` §10.
 
 ## Security posture
 
@@ -682,10 +741,12 @@ phone, so the phone's protections are the data's protections:
   app behind biometric/PIN. Consider SQLCipher for at-rest encryption
   of the database itself if the owner wants defence beyond the OS
   default.
-- **Backups inherit the same duty.** Android auto-backup is encrypted
-  in transit and at rest under the user's account; a manual JSON
-  export is plaintext by nature, so the export flow should say so
-  plainly and leave the owner to put it somewhere sensible.
+- **Backups inherit the same duty.** Android Auto Backup is encrypted
+  with a key derived from the device passcode (Android 9+), so the
+  backup copy is not readable by Google — the local-first privacy
+  property survives the move to cloud backup. A manual JSON export is
+  plaintext by nature, so the export flow should say so plainly and
+  leave the owner to put it somewhere sensible.
 - **The proxy sees prompts, so keep them out of logs.** Log token
   counts, latency and errors — never prompt or completion bodies.
   Bedrock's own data-retention behaviour is worth confirming during
