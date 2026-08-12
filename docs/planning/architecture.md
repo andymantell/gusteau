@@ -3,109 +3,188 @@
 This is a first-pass shape, expected to change as open questions get
 resolved. Nothing here is built yet.
 
-## High-level components
+## Shape: local-first
+
+**The phone is the system. AWS is a capability the phone calls out to
+when it genuinely can't do something itself.** That's the governing
+rule — see `decisions.md`. In practice the only thing that qualifies
+is LLM inference: running a frontier-quality model is not something a
+handset does, and the alternatives (small on-device models) wouldn't
+meet the quality bar this app depends on.
+
+Everything else — the database, all the planning and shopping-list
+logic, every screen's state — lives on the device.
 
 ```
-Flutter app (Android)
-    │  HTTPS (Cognito-authenticated)
-    ▼
-API layer (API Gateway HTTP API + Lambda)
-    │
-    ├── Recipe Suggestion Service  ── Bedrock (LLM) ── Recipe history store
-    ├── Preferences Service        ── DynamoDB (dismissals, reasons, favourites)
-    ├── Photo Recognition Service  ── Bedrock (multimodal) ── S3 (photos)
-    ├── Shopping List Service      ── ingredient normalisation/merge logic
-    └── Retailer Service           ── Sainsbury's adapter: product
-                                      matching + basket handoff
-                                      (v1 is single-retailer; the
-                                      adapter boundary is a seam for
-                                      adding more post-v1)
+Flutter app (Android)  ◀── the system of record
+│
+├── Local DB (SQLite)        recipes, favourites, dismissals,
+│                            preference rules, plans, shopping lists,
+│                            ingredient preferences, pantry staples
+├── On-device logic          ingredient merge, staple exclusion,
+│                            quantity/pack rounding, unit conversion,
+│                            prompt assembly, basket/checklist build
+├── Local photo store        captured recipe cards and food photos
+│
+└── HTTPS (Cognito-authenticated) ──▶ AWS
+                                      │
+                                      └── Inference proxy Lambda
+                                            └── Bedrock
+                                                  · recipe suggestions
+                                                  · photo → recipe
+
+    (+ Sainsbury's product data — on-device or via a fetch Lambda,
+       decided by the §9 spike; see "Retailer data" below)
 ```
 
-Everything sits in the owner's own AWS account, single environment to
-start (no separate "prod/staging" split needed for a personal tool,
-though CDK will still support it cheaply).
+**No household data is stored in AWS.** No DynamoDB, no S3 bucket of
+photos, no server-side copy of what you like or dislike. The cloud
+sees a prompt and returns a completion.
+
+### What this buys
+
+- **Privacy by construction.** Your eating habits, preferences and
+  photos never leave the device except as prompt text at the moment of
+  inference.
+- **Cost.** DynamoDB, S3 and most Lambdas disappear from the bill,
+  leaving Bedrock tokens as essentially the only charge — comfortably
+  inside the £15/month ceiling (see "Cost and frugality").
+- **Offline use.** Browsing recipes, editing the week, regenerating
+  the shopping list and working through the shopping checklist in the
+  supermarket all work with no signal. Only suggestion generation and
+  photo-to-recipe need connectivity.
+- **Latency.** No network round-trip for anything but inference.
+
+### What it costs — and the mitigations
+
+- **Device loss = data loss.** The accumulated favourites, dismissal
+  reasons and preference rules *are* the product's value. Mitigations,
+  in iteration order: Android auto-backup on from day one; explicit
+  JSON export/import the owner can run any time and stash wherever
+  they like; optional encrypted cloud backup as a post-v1 addition if
+  the local-only story ever feels too thin. Tracked as a risk in
+  `risks-and-open-questions.md` §10.
+- **Multi-device and true multi-user need sync**, which local-first
+  doesn't give for free — see "Multi-user, revisited" below.
+- **Logic ships in the app**, so fixing a bug means shipping a build
+  rather than deploying a Lambda. Acceptable for a personal
+  sideloaded app; worth remembering when the retailer-adapter parsing
+  breaks (see "Retailer data").
 
 ## Client — Flutter (Android)
 
-- Talks only to Gusteau's own backend API — never directly to Bedrock,
-  never directly to a supermarket. Keeps all secrets and retailer
-  sessions server-side.
-- Local device auth (biometric/PIN) gates opening the app, on top of
-  Cognito auth against the backend.
-- Camera capture for recipe cards / food photos, upload to backend for
-  processing (not on-device inference).
+The app is the whole product; everything below runs on the handset.
+
+- **Local database: SQLite**, via a typed Flutter data layer (Drift is
+  the obvious candidate — compile-time-checked queries and painless
+  migrations, which matter when the schema is the system of record
+  rather than a cache). Holds every entity in the data model below.
+- **On-device logic** for everything that's plain computation:
+  cross-recipe ingredient merging, pantry-staple exclusion, pack-size
+  rounding, unit conversion, shopping-list assembly, basket/checklist
+  construction, and assembling the LLM prompt from the household's
+  preference rules. None of this needs a server, so none of it gets
+  one.
+- **Photos stay on the device.** Captured images are resized and
+  compressed locally, then sent as part of the inference request —
+  never stored in the cloud. Resizing is needed anyway to keep vision
+  token costs and request payloads down.
+- **Talks to AWS only for inference** (and possibly retailer product
+  data — see below). Never holds AWS credentials directly; never talks
+  to Bedrock without going through the proxy.
+- **Local device auth** (biometric/PIN) gates opening the app. With
+  the data now living on the handset rather than in a cloud account,
+  this is the primary protection for it, not a secondary nicety — see
+  "Security posture".
 
 ## Backend — AWS, CDK (Python)
 
-- CDK app organised as one stack per bounded concern (auth, data,
-  suggestion, ordering) so pieces can be deployed/rolled back
-  independently. No network stack — there is no VPC (see "Cost and
-  frugality").
-- Compute: **Lambda only** for request/response and event-driven work
-  (suggestion generation, ingredient merge, photo processing). The
-  assisted-handoff ordering posture (`decisions.md`) means nothing
-  needs a long-lived browser session, so there's no Fargate/EC2
-  requirement for MVP — see "Cost and frugality" below. If a retailer
-  ever moves to full automation later, whether that needs
-  container-based compute becomes a fresh cost/benefit call at that
-  point, not assumed now.
-- Storage:
-  - **DynamoDB**, on-demand billing mode, for recipes, weekly plans,
-    suggestions, dismissals + favourites, shopping lists, order
-    history.
-  - **S3** for uploaded photos and any extracted/generated recipe
-    images.
-  - **Secrets Manager** — not needed at all for MVP under the
-    assisted-handoff posture (no retailer credentials to store);
-    revisit if/when any retailer moves to full automation.
-- **Bedrock** for:
-  - Recipe suggestion generation (text) — model choice covered above.
-  - Multimodal recipe reconstruction from photos.
-- **Cognito** for household/user authenticated identity against the
-  API — free at this scale, and avoids hand-rolling auth.
-- **CloudWatch** for logging/alerting, especially anything that spends
-  money (order handed off) — treat these as audit events, not just
-  debug logs. Short log retention (e.g. 2 weeks) to keep storage cost
-  negligible.
+Deliberately small. One stack, a handful of resources, no data stores.
+
+- **Inference proxy Lambda** behind an **API Gateway HTTP API**. Takes
+  an assembled prompt (and optionally an image) from the app, calls
+  **Bedrock**, returns the completion. Stateless — it stores nothing.
+  Its jobs beyond relaying:
+  - keep AWS credentials off the device entirely;
+  - pin the model and parameters server-side, so a compromised or
+    modified client can't switch to an expensive model;
+  - enforce a request rate limit and a monthly spend guard, the
+    active control that keeps Bedrock inside budget;
+  - be the one place to add cost logging.
+- **Cognito** authenticates the device to that endpoint. Its role is
+  narrower than before: it protects the *inference budget*, not stored
+  data, because there is no stored data. Still worth having — an
+  unauthenticated Bedrock relay on the public internet is somebody
+  else's free LLM.
+- **CloudWatch** for proxy logs and the billing alarm. Short retention
+  (2 weeks). No personal data in logs: log token counts and latency,
+  never prompt or completion bodies.
+- **No DynamoDB, no S3, no Secrets Manager, no VPC.** Nothing to put
+  in them.
+
+**Considered and rejected: a Cognito Identity Pool handing the device
+scoped IAM credentials to call Bedrock directly**, removing the Lambda
+and API Gateway entirely. It's cheaper still and appealingly simple,
+but it puts usable AWS credentials on the handset and gives up the
+single control point for rate limiting, model pinning and spend
+guarding — a poor trade when the whole cost model rests on Bedrock
+usage staying bounded. The proxy stays.
+
+### Retailer data
+
+Where Sainsbury's product data is fetched from — device or Lambda — is
+decided by the §9 spike, and the local-first steer adds a genuine
+argument for the device: requests from a residential mobile IP are far
+less likely to trip bot protection than requests from AWS IP ranges.
+Against that, parsing logic on the device can only be fixed by
+shipping a build. The spike should weigh both; on-device is the
+default under this architecture unless it proves unworkable.
+
+## Multi-user, revisited
+
+The earlier decision to model `Household` and `User` as first-class
+(`decisions.md`) is in genuine tension with local-first: if the phone
+is the system of record, two household members on two phones have two
+disconnected systems. Sync is the missing piece, and local-first
+doesn't provide it for free.
+
+**Resolution:** keep the schema multi-user-shaped — households, users,
+attribution on dismissals and favourites — exactly as designed, but
+accept that **v1 is single-device**. That preserves the cheap-now,
+expensive-later property the original decision was about (the schema
+doesn't have to be retrofitted) without pretending v1 delivers
+multi-user. Real multi-user is unlocked by sync, which becomes the
+post-v1 feature that would deliver it, and would also solve the
+device-loss problem in passing. Nothing about v1 forecloses it.
 
 ## Cost and frugality
 
-Budget ceiling: **£15/month**, set by the owner. This is comfortably
-achievable for a single-household tool as long as a few well-known AWS
-cost traps are avoided by design, not caught after the fact:
+Budget ceiling: **£15/month**, set by the owner. Local-first makes
+this much easier: with no data stores and almost no compute in the
+cloud, **Bedrock tokens are essentially the only line on the bill.**
 
-- **No NAT Gateway, ever.** This is the single most common way a
-  "cheap" serverless app quietly costs £25+/month — a NAT Gateway
-  bills per-hour just for existing, regardless of traffic. Lambdas
-  here don't need VPC placement at all (Bedrock, DynamoDB, S3,
-  Cognito, Secrets Manager are all reached over the AWS SDK without a
-  VPC) — so no VPC, no NAT, full stop, unless a future need
-  (unlikely) genuinely requires putting a Lambda inside a VPC.
-- **No Application Load Balancer.** ALB bills hourly regardless of
-  traffic. API Gateway (HTTP API, not the pricier REST API type) is
-  pay-per-request with no idle cost and is the right fit here.
-- **No EC2, no always-on Fargate/containers.** Lambda's free tier
-  (1M requests + 400,000 GB-seconds/month) comfortably covers a
-  household of one or two using the app a few times a week — this
-  should run at essentially £0 compute cost most months.
-- **DynamoDB on-demand, not provisioned capacity** — provisioned mode
-  bills for capacity whether it's used or not; on-demand matches this
-  app's bursty, low-volume usage pattern and its free tier.
-- **No managed vector/search store** (e.g. OpenSearch) — moot anyway
-  since there's no external recipe corpus to index (see "Grounding
-  data" above), but worth stating as a standing rule: don't introduce
-  one later without a real, evaluated need.
-- **Bedrock is the one genuinely variable cost** — billed per token.
-  Mitigations: no large RAG context to pay to process on every call
-  (already true — see "Grounding data"); default to a cheaper/smaller
-  model tier and only step up to a more capable one where evaluation
-  shows it's actually needed for quality (applies to both suggestion
-  generation and photo-to-recipe); keep prompts and photo resolution
-  no larger than the task needs.
+- **Bedrock is the one real cost**, billed per token. Mitigations: no
+  RAG context to process on every call (see "Grounding data"); default
+  to a cheaper model tier and step up only where the iteration-1 spike
+  shows it's needed; resize photos on-device before sending; cache
+  rescaled recipe variants so repeat use of a favourite is free (see
+  "Portions and recipe scaling"); and enforce a rate limit and monthly
+  spend guard in the proxy Lambda, which is the active control rather
+  than just a warning.
+- **Lambda and API Gateway** stay inside the free tier at this volume
+  — a few inference calls a week rounds to £0.
+- **Cognito** is free at this scale.
+- **No DynamoDB, S3, Secrets Manager, or vector store** — the
+  local-first design removes them rather than optimising them.
+- **No NAT Gateway, ever.** The classic way a "cheap" serverless app
+  quietly costs £25+/month: it bills per hour just for existing. The
+  proxy Lambda reaches Bedrock over the SDK with no VPC, so there is
+  no VPC and no NAT.
+- **No Application Load Balancer** (bills hourly regardless of
+  traffic); API Gateway HTTP API is pay-per-request with no idle cost.
+- **No EC2, no always-on Fargate/containers.**
 - **A CloudWatch billing alarm at £15/month is a day-one requirement**
-  (iteration 0), not a nice-to-have — it's the backstop that catches
-  a design mistake before it becomes a surprise bill.
+  (iteration 0) — the backstop behind the proxy's spend guard.
 
 ## LLM strategy
 
@@ -237,6 +316,52 @@ requirement is dropped:
   ingredient-matching problem in `risks-and-open-questions.md` §8)
   could be bolted on later — optional, and separate from whether
   suggestion generation itself needs it.
+
+#### The personalised prompt is a visible, editable list
+
+Everything the app learns about the household's tastes is stored as a
+**list of discrete `PreferenceRule` records**, never as an opaque blob
+of accumulated text — and that list is a first-class screen in the
+app, not a hidden internal.
+
+- **Each rule is one editable line.** "Too spicy — go easy on chilli",
+  "No okra", "Nothing over an hour on weeknights". The prompt sent to
+  Bedrock is assembled on-device from the enabled rules at request
+  time.
+- **Permanently dismissing a recipe visibly creates a rule** from the
+  reason given, and the UI says so — the owner sees the rule appear
+  rather than wondering what the app did with their reason.
+- **Reasons are stored verbatim.** No silent LLM rewriting of what the
+  owner typed into something more "prompt-shaped"; putting words in
+  their mouth is exactly the opacity this feature exists to remove. An
+  optional *suggested* rewording they can accept or ignore is fine;
+  automatic replacement is not.
+- **Every rule can be edited, disabled, re-enabled, reordered or
+  deleted.** Disabled rather than deleted matters: "stop applying this
+  for now" is a different intent from "I never meant that", and being
+  able to toggle one off is the fastest way to test whether a rule is
+  making suggestions worse.
+- **Rules can be added by hand**, without a dismissal prompting them —
+  the list is the household's standing brief to the model, however it
+  got there.
+- **The assembled prompt is viewable.** A "see the full prompt"
+  affordance shows exactly what gets sent, rules and all. If the app
+  is going to claim a rule is being applied, it should be able to show
+  it in situ.
+- **Provenance is kept**: whether a rule came from a dismissal (and
+  which recipe), or was typed by hand, plus who added it and when.
+  Useful for making sense of a list that's a year old.
+
+**Deleting a rule does not un-dismiss recipes.** The rule and the
+dismissal are separate facts: "don't suggest this specific recipe
+again" and "we don't like this thing generally" were both true, and
+undoing one shouldn't silently undo the other. Dismissed recipes get
+their own reviewable list, where individual blocks can be lifted.
+
+The same principle — **no hidden learned state** — applies to the
+other things the app quietly accumulates: `IngredientPreference` (see
+below) and `PantryStaple` both get inspectable, editable list screens
+for exactly the same reason.
 
 #### Favourites — the positive mirror of dismissal, and filling the week
 
@@ -380,13 +505,12 @@ It costs nothing now and is a hard requirement for the deferred price
 comparison: comparing retailers is meaningless — actively misleading —
 if it silently pits one's value mince against another's organic, which
 is impossible to avoid if a preference is stored as one retailer's
-SKU. Where a retailer has no
-equivalent at the specified tier, the comparison surfaces that
-explicitly (substituted up/down, or unavailable) rather than quietly
-swapping in whatever matched. This also means preferences must not be
-stored as bare retailer product IDs; per-retailer IDs are a *cache* on
-top of the neutral spec, useful for speed and re-ordering, and
-revalidated because products get discontinued.
+SKU. Where a retailer has no equivalent at the specified tier, the
+comparison surfaces that explicitly (substituted up/down, or
+unavailable) rather than quietly swapping in whatever matched.
+Per-retailer product IDs are therefore only ever a *cache* on top of
+the neutral spec — useful for speed and re-ordering, and revalidated,
+because products get discontinued.
 
 ## Pantry staples — what not to order
 
@@ -450,10 +574,10 @@ like-for-like across retailers automatically.
 
 ## Data model (sketch)
 
-Modelled as multi-household/multi-user from the start (see
-`decisions.md`), even though only one household is expected to exist
-in practice. Every entity below that isn't global hangs off a
-`Household`, not off an implicit single owner.
+**This is the on-device SQLite schema.** There is no cloud copy — see
+"Shape: local-first". Modelled as multi-household/multi-user from the
+start (see `decisions.md` and "Multi-user, revisited"), even though v1
+runs on a single device for a single household.
 
 - `Household` — id, name, members, and settings: `default_portions`,
   `default_meals_per_week`. These seed each new `WeeklyPlan` and are
@@ -488,6 +612,13 @@ in practice. Every entity below that isn't global hangs off a
   member can pick it when filling a slot), and it feeds future
   suggestion prompts as a positive signal — the mirror image of
   `Dismissal`.
+- `PreferenceRule` — household id, the rule text (verbatim as
+  written), enabled flag, sort order, provenance (derived from a
+  dismissal, with the originating recipe id — or added by hand), user
+  id, created/updated timestamps. The enabled rules are what the
+  suggestion prompt is assembled from, and the list is directly
+  editable by the owner — see "The personalised prompt is a visible,
+  editable list" above.
 - `ShoppingList` — household id, week id, merged ingredient lines
   (name, quantity, unit, source recipes), purchasable-quantity
   rounding applied. Each line also carries how it was resolved
@@ -524,18 +655,42 @@ preferences and dismissal history and pools them into the prompt
 context for that household's single shared plan, rather than
 personalising per member.
 
-Dismissals, favourites, and accepted-recipe history are the app's
-accumulating value — losing them means the suggestion engine forgets
-everything it has learned. DynamoDB point-in-time recovery is cheap at
-this scale and should be on from iteration 1.
+Dismissals, favourites, preference rules and accepted-recipe history
+are the app's accumulating value — losing them means the suggestion
+engine forgets everything it has learned. Because they live on the
+device, durability is a device-backup problem: Android auto-backup
+enabled from iteration 1, plus a manual JSON export/import the owner
+controls. See `risks-and-open-questions.md` §10.
 
 ## Security posture
 
-The assisted-handoff decision (`decisions.md`) makes the MVP security
-story unusually strong: **Gusteau holds no card data and no retailer
-credentials at all**, because payment and login only ever happen on
-the retailer's own app/site. The rules below are stated as standing
-policy anyway, so they survive any future move toward automation:
+Two decisions make the v1 security story unusually strong. The
+assisted-handoff posture means **Gusteau holds no card data and no
+retailer credentials at all** — payment and retailer login only ever
+happen on Sainsbury's own app. Local-first means **there is no cloud
+database to breach**: no account holding your eating habits, no bucket
+of your food photos, nothing server-side to leak.
+
+That does move the centre of gravity, though — the data now sits on a
+phone, so the phone's protections are the data's protections:
+
+- **The device is the trust boundary.** Rely on Android's
+  full-disk/file-based encryption, keep the app's database in internal
+  app-private storage (never external/shared storage), and gate the
+  app behind biometric/PIN. Consider SQLCipher for at-rest encryption
+  of the database itself if the owner wants defence beyond the OS
+  default.
+- **Backups inherit the same duty.** Android auto-backup is encrypted
+  in transit and at rest under the user's account; a manual JSON
+  export is plaintext by nature, so the export flow should say so
+  plainly and leave the owner to put it somewhere sensible.
+- **The proxy sees prompts, so keep them out of logs.** Log token
+  counts, latency and errors — never prompt or completion bodies.
+  Bedrock's own data-retention behaviour is worth confirming during
+  the iteration-1 spike, since prompts carry household preferences.
+
+The rules below are standing policy, stated so they survive any future
+move toward automation or cloud sync:
 
 - Gusteau **never asks for, stores, or transmits raw card details** —
   hard rule, never revisited under convenience pressure. If checkout
@@ -546,11 +701,11 @@ policy anyway, so they survive any future move toward automation:
   for a retailer, its credentials go in Secrets Manager, readable only
   by the Ordering Service's execution role — and that expansion gets
   its own security review before it ships.
-- All traffic TLS; every API route requires an authenticated Cognito
-  identity; local biometric/PIN gate on the app itself.
+- All traffic TLS; the inference endpoint requires an authenticated
+  Cognito identity; local biometric/PIN gate on the app itself.
 - Anything money-adjacent (basket handed off, order confirmed) is
-  logged as an auditable event with who/what/when — not just debug
-  logs.
-- Least-privilege IAM per Lambda: the suggestion service can call
-  Bedrock and read preference data, nothing else; the photo service
-  can read its S3 prefix, nothing else; and so on.
+  recorded as an auditable local event with who/what/when — not just
+  debug output.
+- Least-privilege IAM: the proxy Lambda's role can invoke the specific
+  Bedrock model ARNs it needs and nothing else. There are no other
+  roles, because there are no other resources.

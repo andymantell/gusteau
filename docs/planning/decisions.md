@@ -297,3 +297,58 @@ the classic scaling failures (1.5 eggs, non-linear seasoning, pan
 sizes, timings) at no extra cost, since it's the same LLM call either
 way. Caching rescaled variants keeps repeat use of favourites free,
 which matters against the £15/month ceiling.
+
+## 2026-08-12 — Local-first: the device is the system of record
+
+**Decided:** favour on-device storage and compute. The phone's SQLite
+database is the system of record — recipes, favourites, dismissals,
+preference rules, plans, shopping lists, ingredient preferences,
+pantry staples — and all the plain computation (ingredient merging,
+staple exclusion, rounding, unit conversion, prompt assembly, basket
+construction) runs on the device. **AWS is used only for capabilities
+the device genuinely cannot provide**, which in practice means LLM
+inference: a thin authenticated proxy Lambda in front of Bedrock, and
+nothing else. No DynamoDB, no S3, no Secrets Manager, no VPC. Photos
+stay on the handset. Possibly retailer data fetching also moves
+on-device — the §9 spike decides. See `architecture.md`.
+
+Rejected along the way: giving the device scoped IAM credentials via a
+Cognito Identity Pool to call Bedrock directly. Cheaper and simpler,
+but it puts usable AWS credentials on the handset and gives up the one
+control point for rate limiting, model pinning and spend guarding.
+
+**Why:** the owner's architectural steer. It turns out to pay for
+itself several times over: privacy becomes structural (no cloud copy
+of the household's eating habits or photos to leak), the AWS bill
+collapses to essentially Bedrock tokens alone, most of the app works
+offline including in the supermarket, and there's no network hop for
+anything but inference. The costs are real but bounded and mitigable —
+device loss is now a data-loss risk needing backup (§10), true
+multi-user now needs sync (§11), and logic fixes ship as app builds
+rather than Lambda deploys.
+
+## 2026-08-12 — The personalised prompt is a visible, editable list
+
+**Decided:** what the app learns about the household's tastes is
+stored as a list of discrete `PreferenceRule` records, not an opaque
+accumulated blob, and that list is a screen in the app. Permanently
+dismissing a recipe visibly creates a rule from the reason given.
+Every rule is editable, disableable (distinct from deletable),
+reorderable and deletable, and rules can be added by hand. The
+assembled prompt is viewable in full. Reasons are stored verbatim —
+no silent LLM rewording, though an optional suggested rewrite is
+acceptable. Deleting a rule does not un-dismiss recipes; dismissed
+recipes get their own reviewable list. The same no-hidden-learned-state
+principle extends to `IngredientPreference` and `PantryStaple`, which
+also get editable list screens. See `architecture.md`.
+
+**Why:** the owner asked to see and edit the personalisation rather
+than have it accumulate invisibly, and specified a list over a text
+blob. That's the right instinct — a single growing blob is impossible
+to audit, impossible to partially retract, and tends to drift into
+self-contradiction as reasons pile up over months. Discrete toggleable
+rules make it possible to see exactly why suggestions changed, and to
+test a hypothesis by switching one off. Storing reasons verbatim
+matters for the same reason: an LLM helpfully "improving" the owner's
+words into something they didn't say would reintroduce precisely the
+opacity this feature removes.

@@ -65,10 +65,11 @@ ingredient-matching problem in §8, which is a separate concern.
 ## 7. Budget / AWS cost expectations
 
 **Resolved 2026-08-12 — see `decisions.md`.** Ceiling of **£15/month**.
-Achievable by design — Lambda-only compute, no VPC/NAT, no ALB, no
-always-on containers, DynamoDB on-demand — see "Cost and frugality" in
-`architecture.md`. CloudWatch billing alarm at £15 is an iteration 0
-requirement.
+Made much easier by the later local-first decision: with no cloud data
+stores and almost no cloud compute, Bedrock tokens are essentially the
+only line on the bill. See "Cost and frugality" in `architecture.md`.
+A CloudWatch billing alarm at £15 plus a spend guard in the proxy
+Lambda are iteration 0 requirements.
 
 ## 8. Ingredient → purchasable product matching
 
@@ -144,3 +145,49 @@ properly — but nothing about v1 fails if the answer is "the floor."
 three more retailers, where the floor is *not* acceptable — a price
 comparison built on estimated prices would be worse than none. That's
 the bar the deferred comparison feature has to clear.
+
+**Local-first changes one input to this spike** (see §11): fetching
+from the device uses a residential mobile IP, which is far less likely
+to trip bot protection than AWS IP ranges — a real point in favour of
+on-device fetching. Against it, parsing logic on the device can only
+be fixed by shipping a build. The spike should evaluate both.
+
+## 10. Device loss = data loss *(open — accepted, needs mitigation)*
+
+Local-first puts the accumulated favourites, dismissal reasons,
+preference rules and ingredient preferences on the handset. That data
+*is* the product's value — a year of learned preferences is not
+reconstructible — and there is no server-side copy to restore from.
+
+Mitigation ladder, cheapest first:
+
+- **Android auto-backup**, on from iteration 1. Nearly free, but
+  worth verifying it actually captures the app database rather than
+  assuming it does.
+- **Manual JSON export/import** the owner can run any time and store
+  wherever they like. Also doubles as the migration path to a new
+  phone and as an escape hatch if the app is ever abandoned. Note the
+  export is plaintext.
+- **Optional encrypted cloud backup**, post-v1, if local-only ever
+  feels too thin. This is the same machinery sync would need (§11),
+  so the two are worth designing together rather than separately.
+
+Open question: is auto-backup plus manual export enough for the
+owner's comfort, or should backup be designed in earlier? Cheap to
+decide once the app is in real use and the data actually matters.
+
+## 11. Sync — what unlocks true multi-user *(open, post-v1)*
+
+Local-first and the multi-household schema (`decisions.md`) are in
+tension: two members on two phones are two disconnected systems.
+Resolved for now by accepting **v1 is single-device** while keeping
+the schema multi-user-shaped, so nothing needs retrofitting — see
+`architecture.md`, "Multi-user, revisited."
+
+If sync is ever wanted, the open questions are what shape it takes
+(a hosted sync service, a CRDT-based peer sync, or a simple
+last-writer-wins push to a private store), how it squares with the
+£15/month ceiling and the no-cloud-data privacy property that
+local-first just bought, and whether it's actually worth it for a
+household that may only ever have one active user. Worth noting it
+would solve §10 in passing.

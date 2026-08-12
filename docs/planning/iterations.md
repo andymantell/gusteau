@@ -11,22 +11,24 @@ a genuinely acceptable fallback, rather than gating the release on
 four.
 
 ## Iteration 0 — Foundations
-- CDK app skeleton (Python), bootstrapped in the owner's AWS account.
-- Auth: Cognito user pool, with `Household`/`User` modelled from the
-  start (see `architecture.md`) even though only one household and
-  one or two users will exist in practice.
-- API Gateway (HTTP API) + a "hello world" Lambda, deployed via CDK.
-  No VPC — Lambdas call AWS services directly, no NAT Gateway or ALB
-  anywhere in the design. DynamoDB table(s) created on-demand billing.
-  See `architecture.md`, "Cost and frugality."
-- Flutter app skeleton: login against Cognito, one screen calling the
-  API.
-- CI: lint/test for both CDK (Python) and Flutter, deploy pipeline
-  (manual trigger is fine for a personal project).
-- CloudWatch billing alarm at **£15/month** (see `decisions.md`).
-- **Outcome:** empty app that authenticates and talks to a real
-  backend, on infrastructure that costs close to £0 at this usage
-  level.
+- Flutter app skeleton with the **local SQLite layer** (Drift or
+  equivalent) and migration tooling — this is the system of record, so
+  it gets set up properly on day one.
+- `Household`/`User` in the local schema from the start (see
+  `architecture.md`), even though v1 is one household on one device.
+- Android auto-backup enabled and **verified to actually capture the
+  app database** (see `risks-and-open-questions.md` §10).
+- CDK app skeleton (Python): Cognito user pool, API Gateway HTTP API,
+  and the **inference proxy Lambda** — no VPC, no NAT, no ALB, no data
+  stores. See `architecture.md`, "Cost and frugality."
+- App authenticates to the proxy and gets a round-trip response back.
+- CI: lint/test for both Flutter and CDK (Python); manual-trigger
+  deploy is fine for a personal project.
+- CloudWatch billing alarm at **£15/month**, plus the proxy's own rate
+  limit and spend guard (see `decisions.md`).
+- **Outcome:** an app with a real local database that can reach
+  Bedrock through an authenticated proxy, on infrastructure costing
+  close to £0.
 
 ## Iteration 1 — Recipe suggestions (core loop)
 - **Step zero, before building the service:** a small manual prompt
@@ -41,9 +43,10 @@ four.
 - Bedrock integration for recipe suggestion generation (general model,
   cookery-focused prompting, no external corpus — see
   `architecture.md`).
-- `Household` / `User` / `WeeklyPlan` / `Suggestion` / `Recipe` data
-  model in DynamoDB, including household default portions and meals
-  per week, and the per-week overrides of both.
+- `WeeklyPlan` / `Suggestion` / `Recipe` in the local schema,
+  including household default portions and meals per week, and the
+  per-week overrides of both.
+- On-device prompt assembly; the proxy relays it to Bedrock.
 - "Suggest N recipes for the week" + per-suggestion refresh, with the
   week's portion count fed into the generation prompt so recipes come
   back at the right quantities (see `architecture.md`, "Portions and
@@ -54,10 +57,17 @@ four.
 - **Outcome:** owner gets a real week of suggestions and can refresh
   individual ones.
 
-## Iteration 2 — Preferences: favourites and dismissals
+## Iteration 2 — Preferences: favourites, dismissals, editable prompt
 - Temporary vs. permanent dismissal, reason capture UI.
 - Favouriting a recipe (household-wide, works on any `Recipe`
-  regardless of source).
+  regardless of source), stored locally.
+- **`PreferenceRule` list and its screen** — the personalised prompt
+  as an editable list rather than a hidden blob: rules created
+  visibly from permanent dismissals, hand-addable, each one editable /
+  disableable / reorderable / deletable, with a "see the full
+  assembled prompt" view. Dismissed recipes get their own reviewable
+  list so a block can be lifted independently of its rule. See
+  `architecture.md`.
 - Slot refresh gains a second source: fill from favourites instead of
   asking the LLM, so a week can be planned as a mix of both — see
   `architecture.md`.
@@ -73,16 +83,19 @@ four.
   of always starting from a blank LLM suggestion.
 
 ## Iteration 3 — Photo-to-recipe
-- Photo capture (recipe card and food) → S3 → Bedrock multimodal call
-  → structured `Recipe`. Simple, general-purpose prompt — no cookery
-  specialisation, preference grounding, or RAG needed (see
-  `architecture.md`), so this doesn't depend on iteration 1's LLM
-  spike.
+- Photo capture (recipe card and food), resized and compressed
+  on-device, sent through the proxy to Bedrock → structured `Recipe`
+  stored locally. **Photos stay on the device** — no S3. Simple,
+  general-purpose prompt — no cookery specialisation or preference
+  grounding needed (see `architecture.md`), so this doesn't depend on
+  iteration 1's LLM spike.
 - Slot into the weekly plan alongside LLM-suggested recipes.
 - **Outcome:** owner can photograph something and get a usable recipe
   back, added to their week.
 
 ## Iteration 4 — Shopping list generation
+All on-device — this iteration adds no AWS resources.
+
 - Ingredient normalisation and cross-recipe merging for a week's plan.
 - Purchasable-quantity rounding, applied to merged totals so three
   recipes needing 300g between them don't order three packs.
@@ -99,7 +112,11 @@ four.
 - Flutter: shopping list / basket review screen — every line resolved
   with a default, guessed lines flagged and one-tap correctable, plus
   a collapsed "assumed you already have these" section for skipped
-  staples.
+  staples. Editable list screens for `IngredientPreference` and
+  `PantryStaple`, per the no-hidden-learned-state principle.
+- JSON export/import of the local database (`risks-and-open-questions.md`
+  §10) — by this point there's accumulated data genuinely worth not
+  losing.
 - **Outcome:** one clean shopping list per week instead of per-recipe
   lists; the app stops asking about mince after the first time, and
   stops trying to sell you olive oil you already have.
@@ -108,7 +125,10 @@ four.
 - **Spike first:** how much Sainsbury's product data can we get, and
   how (`risks-and-open-questions.md` §9)? This decides which of the
   tiers below v1 ships with. Now a one-retailer question with an
-  acceptable floor, not a project risk.
+  acceptable floor, not a project risk. The spike also settles
+  on-device vs. proxy-side fetching — on-device is the default under
+  the local-first steer, and a residential IP is likely to fare better
+  against bot protection than AWS ranges.
 - Ingredient → Sainsbury's product matching, at whichever tier the
   spike supports:
   - **Floor (always achievable):** a well-ordered, grouped checklist
@@ -142,6 +162,10 @@ weekly. Known candidates, roughly in the order they seem worth doing:
   retailer, and like-for-like matching (already designed for: see
   `architecture.md`, "Ingredient specificity and product
   preferences").
+- **Sync across devices** — what would unlock true multi-user, and
+  would solve device-loss backup in passing
+  (`risks-and-open-questions.md` §10, §11). Needs to be squared with
+  the no-cloud-data privacy property local-first just bought.
 - **Fully automated checkout** for a specific retailer, if ever wanted
   — separately scoped, with its own security review (`decisions.md`).
 - From the "not yet specified" list in `requirements.md`: nutrition

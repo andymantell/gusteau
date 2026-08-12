@@ -8,9 +8,15 @@ scope for MVP versus later is expressed by the build order in
 
 ## Platform / stack (given, not negotiable)
 
-- Backend infrastructure defined as code with **AWS CDK, Python**.
 - Client is a **Flutter** app, **Android** only for now.
-- Recipe/ingredient intelligence runs on **AWS Bedrock**.
+- **Local-first:** the device is the system of record. Storage and
+  computation happen on the phone; AWS is used only for capabilities
+  the device genuinely can't provide — in practice, LLM inference.
+  See `decisions.md`.
+- Recipe/ingredient intelligence runs on **AWS Bedrock**, reached via
+  a thin authenticated proxy.
+- What little backend exists is defined as code with **AWS CDK,
+  Python**.
 
 ## Plan configuration — portions and meals per week
 
@@ -47,7 +53,8 @@ scope for MVP versus later is expressed by the build order in
     it and why is still recorded.
 - Any good recipe can be **saved as a favourite**, regardless of where
   it came from (LLM suggestion, photo-to-recipe, or manual entry).
-  Favouriting applies household-wide, mirroring dismissal.
+  Favourites live in the on-device database. Favouriting applies
+  household-wide, mirroring dismissal.
 - When planning a week, the owner can **fill some of the N slots from
   favourites** directly instead of an LLM suggestion, and have the LLM
   **fill the remaining slots** — aware of which favourites have
@@ -55,6 +62,30 @@ scope for MVP versus later is expressed by the build order in
   them (variety, and ideally shared ingredients) rather than
   suggesting blind. See `decisions.md` for how this fits the existing
   refresh mechanic rather than being a separate planning mode.
+
+## The personalised prompt is visible and editable
+
+- Everything the app has learned about the household's tastes is held
+  as a **list of individual preference rules**, not one opaque blob of
+  text, and that list is **a screen in the app**.
+- Permanently dismissing a recipe with a reason **visibly adds a rule**
+  — the owner sees what was added, in their own words, rather than
+  wondering what became of the reason they typed.
+- Each rule can be **edited, disabled, re-enabled, reordered, or
+  deleted**, and rules can be **added by hand** without a dismissal to
+  prompt them. Disabling is distinct from deleting — useful for
+  testing whether a rule is making suggestions worse.
+- The **assembled prompt is viewable** in full, so a claim that a rule
+  is being applied can actually be checked.
+- Reasons are stored **verbatim** — no silent LLM rewording of what
+  the owner wrote. A suggested rewrite they can accept or ignore is
+  fine; automatic replacement is not.
+- Deleting a rule **does not** un-dismiss recipes; dismissed recipes
+  have their own reviewable list where individual blocks can be
+  lifted.
+- Same principle applies to the other learned state — **ingredient
+  preferences and the pantry staples list are inspectable and editable
+  too**. No hidden learned state anywhere.
 
 ## Recipe content
 
@@ -160,9 +191,11 @@ scope for MVP versus later is expressed by the build order in
 
 ## Household / multi-user
 
-- Data model and auth are built as multi-household/multi-user from
-  the start, not hard-coded to a single owner — see `decisions.md`.
-  In practice this will likely only ever run for one household.
+- The **schema** is built as multi-household/multi-user from the
+  start, not hard-coded to a single owner — see `decisions.md`.
+- **v1 runs on a single device**, which is what local-first implies:
+  true multi-user across two phones needs sync, which is a post-v1
+  feature. The schema not needing a retrofit is the point.
 - No public sign-up flow; this stays a personal tool.
 - One shared weekly plan per household; dismissals (temporary or
   permanent) apply household-wide — see `decisions.md`.
@@ -171,13 +204,16 @@ scope for MVP versus later is expressed by the build order in
 
 - Called out explicitly as a top priority because a real debit card
   and real supermarket accounts are involved.
-- Under the assisted-handoff posture, MVP Gusteau holds **no card data
+- Under the assisted-handoff posture, v1 Gusteau holds **no card data
   and no retailer credentials at all** — payment and retailer login
-  only ever happen on the retailer's own app/site. Standing hard
-  rules (never store card data; credentials only ever in a managed
-  secret store, and only if automation is ever added; biometric gate;
-  least-privilege IAM; audit logging of money-adjacent events) are
-  specified in `architecture.md`, "Security posture."
+  only ever happen on Sainsbury's own app/site.
+- Local-first means **there is no cloud database to breach** — no
+  server-side copy of your eating habits, preferences, or food photos.
+  The cloud sees a prompt and returns a completion.
+- In exchange, **the device becomes the trust boundary**: app-private
+  storage, biometric/PIN gate, and honesty about the fact that a
+  manual JSON export is plaintext. Standing rules are specified in
+  `architecture.md`, "Security posture."
 
 ## Not yet specified (owner to flesh out over time)
 
