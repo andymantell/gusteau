@@ -658,10 +658,9 @@ arithmetic around the model, which is fully deterministic.
 
 **Decided:** no upfront UX document — no screen inventory, no flow
 diagrams, no wireframes. Screens get built and the owner reacts to the
-running app. To make that work from a phone, `ci.yml` uploads the
-**debug APK as a run artifact** from the very first build: debug
-builds use Flutter's auto-generated key, so this needs no keystore, no
-AWS, no OIDC and no secrets.
+running app. To make that work from a phone, `ci.yml` uploads a
+**signed APK artifact on every `main` push**, so a build reaches the
+device on every change rather than only on tagged releases.
 
 **Why:** the owner's preference, and the better loop. A screen
 inventory asks someone to have an opinion about a description of an
@@ -675,3 +674,45 @@ ahead of the one-time AWS console bootstrap.
 silent. Screens are not going to be back-specified into the docs after
 the fact; `requirements.md` describes behaviour and the app itself
 describes its interface.
+
+*(Amended 2026-08-12: originally this used unsigned debug APKs, on the
+assumption that generating a keystore needed a PC. It doesn't —
+CloudShell runs `keytool` from a phone browser — so builds are signed
+with the real key from the first one, avoiding a later signing-identity
+switch that would have forced an uninstall.)*
+
+## 2026-08-12 — Photos are transient, not stored
+
+**Decided:** a captured image is held only until the extracted recipe
+is confirmed, then deleted. No photo store on the device, nothing in
+the cloud, nothing in backups or exports.
+
+**Why:** the owner pointed out that these are inputs to OCR and image
+recognition, not records — once the `Recipe` exists, the pixels have
+no remaining job. Correct, and it deletes a surprising amount of
+design: the local photo store, the 25MB Auto Backup quota problem,
+the backup-exclusion rules, the optional-photos export archive, and
+the UI caveat about restored installs losing snapshots. The app's data
+is now text only, comfortably inside every relevant limit.
+
+## 2026-08-12 — Signed builds from the first one; bootstrap from CloudShell
+
+**Decided:** the Android signing keystore is generated in **AWS
+CloudShell** — which runs `keytool` in a phone browser — and used to
+sign APKs from the very first build. `ci.yml` uploads a signed APK
+artifact on `main` pushes, with the signing step gated to `push`
+events so pull requests still run with no secrets. The one-time OIDC
+bootstrap is likewise a single paste into CloudShell. See `ci-cd.md`.
+
+**Supersedes** the debug-APK approach recorded above, which existed
+only to work around an assumed constraint — that generating a keystore
+required a PC. It didn't.
+
+**Why:** the owner asked why builds weren't signed from the start, and
+whether AWS could be set up from a phone. Both fair. Signing from the
+first build avoids ever changing signing identity, which would force
+an uninstall and — after iteration 1 — destroy the local database.
+Generating the key in CloudShell rather than in this planning session
+or a build pipeline keeps private key material somewhere the owner
+controls, which matters more than the convenience of having it
+generated for them.

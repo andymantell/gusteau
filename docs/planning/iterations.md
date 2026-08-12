@@ -22,18 +22,19 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
   own) actions, SHA-pinned; anything else hand-rolled in bash —
   including the OIDC exchange, so no third-party code sits between the
   token and the AWS account (see `ci-cd.md`).
-- **`ci.yml`** — lint, test and `cdk synth` on every PR; no secrets,
-  no AWS access. **Uploads the debug APK as a run artifact**, which is
-  how UI review happens from the phone before signing or AWS exist
-  (see `ci-cd.md`).
+- **`ci.yml`** — lint, test and `cdk synth`; PRs run with no secrets
+  and no AWS access. On `main` pushes it also uploads a **signed APK
+  artifact**, which is how UI review happens from the phone (see
+  `ci-cd.md`).
 - **`deploy.yml`** — OIDC-authenticated `cdk diff` + `cdk deploy`, no
   stored AWS credentials, gated behind a `production` environment so
   it can be approved from the GitHub mobile app.
 - **`release.yml`** — signed release APK published as a GitHub Release
   asset, downloadable and sideloadable straight from the phone.
-- Generate the Android signing keystore and store it in secrets —
-  **and keep a copy somewhere safe**, since losing it means never
-  being able to upgrade in place (see `ci-cd.md`).
+- Generate the Android signing keystore **in AWS CloudShell** (phone
+  browser, same place as the OIDC bootstrap), store it base64 in
+  secrets, and **download a copy somewhere durable** — losing it means
+  never being able to upgrade in place (see `ci-cd.md`).
 - Flutter app skeleton with the **local SQLite layer** (Drift or
   equivalent) and migration tooling — this is the system of record, so
   it gets set up properly on day one: per-version fixture databases

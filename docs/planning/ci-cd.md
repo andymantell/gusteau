@@ -200,28 +200,29 @@ Everything after this point is automated.
 
 ### `ci.yml` — on every PR and push
 
-Fast feedback, no credentials needed, so it runs safely on any PR.
+Fast feedback. PRs need no credentials at all; only `main` pushes
+touch the signing secrets.
 
 - **infra job:** `ruff` lint, `pytest`, and `cdk synth`. Synth is the
   real check — it proves the CDK app compiles and produces a valid
   template without touching AWS.
-- **app job:** `flutter analyze`, `flutter test`, and a **debug** APK
-  build, uploaded via `actions/upload-artifact`. Flutter SDK installed
-  by the cached bash step, not a third-party action.
+- **app job:** `flutter analyze`, `flutter test`, and an APK build.
+  Flutter SDK installed by the cached bash step, not a third-party
+  action.
 
-**The debug artifact is deliberately load-bearing early on.** UX is
-being designed by building it and reacting to it rather than by
-specifying it upfront (see `decisions.md`), so there has to be a way
-to get a build onto the phone from day one. A debug APK is signed with
-Flutter's auto-generated debug key, so this path needs **no keystore,
-no AWS, no OIDC, no secrets whatsoever** — just download from the
-Actions run page and install. That decouples the two pipelines: screen
-and database work can proceed while the one-time AWS console step
-waits for a PC.
+**On `main` pushes only, it also builds and uploads a *signed* APK.**
+UX is designed by building it and reacting to the running app (see
+`decisions.md`), so a build has to reach the phone on every change,
+not only on tagged releases. Signing these with the real keystore from
+the very first build avoids ever switching signing identity — a switch
+would force an uninstall, and after iteration 1 that means losing
+data.
 
-Caveat to handle while the database is still empty: debug and release
-builds have different signing identities, so moving to signed releases
-means uninstalling the debug build first.
+The signing step is gated to `push` events on `main`, so **pull
+requests still run with no secrets at all** and the "a PR can never
+reach credentials" property survives. Tagged releases go through
+`release.yml` as proper GitHub Releases; the `main` artifact is the
+day-to-day loop.
 - Runs both in parallel; caches pip, pub and Gradle.
 - No `id-token` permission, no secrets — deliberately, so a PR can
   never reach AWS.
@@ -264,6 +265,25 @@ touches nothing live.
 
 Release APKs must be signed with a keystore generated once
 (`keytool`), then stored base64-encoded in GitHub secrets.
+
+**Generate it in AWS CloudShell** — the same phone-browser terminal
+used for the OIDC bootstrap, so no PC is needed and the key never
+passes through anyone else's hands:
+
+```bash
+sudo dnf install -y java-17-amazon-corretto-headless   # keytool
+keytool -genkeypair -v -keystore gusteau.jks   -alias gusteau -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 gusteau.jks > gusteau.jks.b64   # paste into the secret
+```
+
+Then use CloudShell's **Actions → Download file** to save
+`gusteau.jks` somewhere durable before the session expires. That copy
+matters — see below.
+
+Generating it here rather than in a build pipeline or a third-party
+environment is deliberate: private key material should be created
+where the owner controls it, and CloudShell is already open for the
+OIDC step.
 
 **This interacts with the backup story in a way that isn't obvious:**
 Android identifies an app by its signing certificate. Lose the
