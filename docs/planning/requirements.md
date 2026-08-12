@@ -54,10 +54,10 @@ scope for MVP versus later is expressed by the build order in
   Favourites live in the on-device database.
 - **Repeat cooldown:** something you've cooked recently — *or a near
   variation of it* — isn't offered again as an LLM suggestion for a
-  configurable number of weeks (default around 6). Done by sending the
-  recent history into the prompt, with a cheap structural check on the
-  way back as a backstop; see `architecture.md`, "Repeat cooldown",
-  for why matching on recipe identity alone wouldn't work. Picking a
+  configurable number of weeks (default around 6). Done purely by
+  sending the recent history into the prompt — see `architecture.md`,
+  "Repeat cooldown", for why matching on recipe identity wouldn't work
+  and why no app-side backstop is being built yet. Picking a
   favourite yourself is exempt — the cooldown only governs what the
   app offers unprompted, never what you choose.
 - When planning a week, the owner can **fill some of the N slots from

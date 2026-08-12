@@ -481,16 +481,13 @@ decision. Notably, the most capable open implementation available
 independently arrived at the same stopping point Gusteau had already
 chosen for its own reasons.
 
-## 2026-08-12 — Repeat cooldown: prompt-led, with a structural backstop
+## 2026-08-12 — Repeat cooldown: prompt only
 
 **Decided:** recently cooked meals — and near variations of them —
 don't come back as unprompted suggestions for a configurable window
-(default ~6 weeks). Mechanism: send the recent history into the
-suggestion prompt as the primary control, and back it with a cheap
-app-side near-duplicate check on the response, comparing structured
-attributes the model already emits (primary protein/ingredient,
-cooking method, cuisine). A match is silently regenerated. Favourite
-picks are exempt; the window reads accepted suggestions, not
+(default ~6 weeks). Mechanism: **send the recent history into the
+suggestion prompt, and nothing else.** No app-side duplicate check.
+Favourite picks are exempt; the window reads accepted suggestions, not
 everything ever generated. See `architecture.md`, "Repeat cooldown".
 
 **Corrects an earlier framing in this plan** that described the
@@ -509,14 +506,20 @@ similarity for free — a model understands that a traybake and a roast
 with the same components are the same dinner, where no cheap
 deterministic check does. It costs a few hundred tokens.
 
-**Why a backstop at all:** prompt instructions do get dropped, and the
-structural check is nearly free given the attributes are already being
-emitted. It's deliberately coarse — the cost of a false positive is
-one extra generation the owner never sees, so bluntness is cheap and
-leakage is what actually hurts.
+**Why no backstop yet:** a structural check (protein + method +
+cuisine matching something recent → regenerate) was drafted and then
+dropped at the owner's request. It's a crude heuristic silently
+suppressing suggestions they'd never see, added before any evidence it
+was needed. What makes deferring safe is that **this failure mode is
+visible**: if the prompt isn't holding, chicken traybake shows up
+every fortnight and it's obvious within weeks. Better to add a check
+against real evidence — including evidence of *how* it fails, which
+determines what the right check is — than to guess now.
 
-**Upgrade path if the coarse check proves inadequate:** embedding
+**Escalation path if it does prove insufficient:** strengthen the
+prompt first; then a structural check on the response; then embedding
 similarity over title plus ingredients, stored locally and
-cosine-compared against the recent set. Precise, and brute force over
-a few dozen vectors is trivial on-device — but it adds a dependency
-and a column, so not before the simple version is shown to fail.
+cosine-compared against the recent set. The structured attributes
+(protein, method, cuisine) are recorded on `Recipe` regardless — they
+earn their place for display and filtering, and it means step two
+wouldn't start with a blind history.

@@ -362,8 +362,11 @@ both prompts, rather than being decided independently by each:
   step that's easy to get wrong for *this* dish. See `requirements.md`
   for the full spec.
 - **A few structured attributes** emitted alongside the prose —
-  primary protein/ingredient, cooking method, cuisine. Free to ask
-  for, and they're what the repeat-cooldown check compares on.
+  primary protein/ingredient, cooking method, cuisine. Near-free to
+  ask for, and they earn their place on the recipe screen and for
+  filtering favourites ("show me the fish ones"). They'd also be what
+  escalation step 2 of the repeat cooldown compares on, if that's ever
+  needed — recording them now means that check wouldn't start blind.
 - **Rough nutrition estimates per portion** — approximate calories and
   macros, emitted alongside the recipe. Free in practice: the model is
   already generating the recipe, so this costs a few extra tokens and
@@ -550,34 +553,39 @@ which is the favourites path, and favourites are exempt by design.
 Near-duplicate detection, not identity matching, is the actual
 problem.
 
-**Primary mechanism: tell the model.** The recently-cooked set goes
-into the suggestion prompt — "here's what we've eaten in the last six
-weeks; don't repeat these or anything close to them". Titles plus a
-few key attributes, not full recipes, so it stays cheap (a few hundred
-tokens). LLMs are good at this instruction, and it's the only
-mechanism that can catch *semantic* similarity for free, because it
+**The mechanism is the prompt, and only the prompt.** The
+recently-cooked set goes into the suggestion request — "here's what
+we've eaten in the last six weeks; don't repeat these or anything
+close to them". Titles plus a few key attributes, not full recipes, so
+it stays cheap (a few hundred tokens). This is also the only mechanism
+that catches *semantic* similarity for free, because a model
 understands that a traybake and a roast with the same components are
-the same meal.
+the same meal, where no cheap deterministic check does.
 
-**Backstop: a cheap structural check on the way back.** Prompt
-instructions do get dropped, so accept the suggestion only after
-comparing it against the cooldown window on structured attributes the
-model is already emitting anyway — **primary protein/ingredient,
-cooking method, and cuisine**. A new suggestion matching all three of
-something recent (chicken + roast + Mediterranean) is treated as a
-near-duplicate and silently regenerated. Coarse, deterministic, needs
-no extra call and no new dependency, and it catches precisely the
-loud, obvious failure the prompt might let through.
+**Deliberately no app-side backstop for now.** The obvious addition —
+comparing structured attributes and silently regenerating on a match —
+is not being built, on the grounds that it's a crude heuristic
+suppressing suggestions the owner never gets to see, added before
+there's any evidence it's needed.
 
-Being coarse is acceptable *because the consequence is only a
-regeneration* — a false positive costs one extra call and the owner
-never sees it. If in practice it proves too blunt (rejecting genuinely
-different dishes) or too leaky, the upgrade path is embedding
-similarity: embed title plus ingredients on creation, store the
-vector locally, cosine-compare against the recent set. Brute force
-over a few dozen vectors is trivial on-device, and Bedrock's embedding
-models are cheap — but it's a dependency and a column, so it's not
-worth adding before the simple version has been shown to fail.
+What makes deferring safe here is that **this failure mode is
+visible**. If the prompt isn't holding, the symptom is chicken traybake
+turning up every fortnight, and the owner will notice within weeks. So
+the check can be added against real evidence — including evidence of
+*how* it's failing, which determines what the right check even is —
+rather than guessed at now.
+
+**If it does need escalating**, in order of increasing cost:
+
+1. Strengthen the prompt — more of the history, or more explicit
+   framing about what "too similar" means.
+2. A structural check on the response (primary protein + cooking
+   method + cuisine matching something recent → regenerate). Coarse,
+   deterministic, no extra call.
+3. Embedding similarity over title plus ingredients, stored locally
+   and cosine-compared against the recent set. Precise; brute force
+   over a few dozen vectors is trivial on-device and Bedrock's
+   embedding models are cheap, but it adds a dependency and a column.
 
 **Applies only to unprompted suggestions.** Picking a favourite is
 always allowed regardless of when it was last cooked — the cooldown
@@ -814,10 +822,9 @@ so everything below is implicitly "mine" (see `decisions.md`).
   per-portion nutrition (kcal + macros, LLM-estimated, informational),
   source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /
-  manual), tags (cuisine, time, difficulty), plus **primary
-  protein/ingredient and cooking method** — emitted by the model
-  alongside the recipe and used by the repeat-cooldown near-duplicate
-  check (see "Repeat cooldown" above). Scaled re-expressions are
+  manual), tags (cuisine, time, difficulty, primary
+  protein/ingredient, cooking method) — emitted by the model alongside
+  the recipe, used for display and filtering. Scaled re-expressions are
   cached as variants keyed on `(recipe_id, serves)` — see "Portions
   and recipe scaling" above.
 - `WeeklyPlan` — week id, `portions` and `meal_count` (seeded from
