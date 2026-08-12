@@ -34,11 +34,20 @@ meant to leave the owner with something usable on their own phone.
 - **Outcome:** owner gets a real week of suggestions and can refresh
   individual ones.
 
-## Iteration 2 — Preferences and dismissal memory
+## Iteration 2 — Preferences: favourites and dismissals
 - Temporary vs. permanent dismissal, reason capture UI.
-- Dismissal reasons fed back into the suggestion prompt context.
+- Favouriting a recipe (household-wide, works on any `Recipe`
+  regardless of source).
+- Slot refresh gains a second source: fill from favourites instead of
+  asking the LLM, so a week can be planned as a mix of both — see
+  `architecture.md`.
+- Dismissal reasons (negative) and favourites (positive) both fed back
+  into the suggestion prompt context; when the LLM fills remaining
+  slots it's given the recipes already sitting in the other slots for
+  that week.
 - **Outcome:** suggestions visibly improve/avoid known dislikes over
-  time.
+  time, and the owner can build a week around known favourites instead
+  of always starting from a blank LLM suggestion.
 
 ## Iteration 3 — Photo-to-recipe
 - Photo capture (recipe card and food) → S3 → Bedrock multimodal call

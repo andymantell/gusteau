@@ -119,3 +119,23 @@ usage history — not sourced upfront. See `architecture.md`
 single-household tool, sourcing/licensing one upfront isn't worth the
 effort when the model's own knowledge plus real preference data covers
 the actual requirement.
+
+## 2026-08-12 — Favourites, and how a week gets filled
+
+**Decided:** any recipe can be saved as a household-wide favourite —
+the positive mirror of a permanent dismissal, feeding future
+suggestion prompts as a positive signal. Rather than building a
+separate "plan the week" mode, favouriting extends the existing
+per-slot refresh mechanic: refreshing a slot can now pull from
+favourites instead of asking the LLM. A week is planned by any mix of
+default LLM suggestions, favourite picks, and refreshes of either.
+When the LLM fills remaining slots, it's given the recipes already
+chosen for the other slots that week, so it can plan for variety and,
+where possible, ingredient overlap with what's already picked. See
+`architecture.md`.
+
+**Why:** the owner wanted to be able to save a good recipe and build a
+week around known favourites rather than starting from scratch every
+time. Folding it into the existing refresh mechanic (rather than a new
+planning flow) keeps the interaction model simple and reuses machinery
+already being built in iteration 1.

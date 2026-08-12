@@ -143,6 +143,32 @@ requirement is dropped:
   could be bolted on later — optional, and separate from whether
   suggestion generation itself needs it.
 
+#### Favourites — the positive mirror of dismissal, and filling the week
+
+A saved favourite is treated as the positive counterpart to a
+permanent dismissal: both are household-wide preference signal that
+gets fed back into the suggestion prompt (favourites push towards a
+style/cuisine/flavour profile, dismissal reasons push away from one).
+
+Rather than a separate "meal planning mode," favouriting slots into
+the existing per-slot refresh mechanic from the core loop: refreshing
+a `Suggestion` slot gains a second source alongside "ask the LLM for
+something new" — "fill from favourites." A week can be planned as any
+mix of the two: leave every slot on its default LLM suggestion, swap
+specific slots to a favourite, or swap most of them and let the LLM
+fill only what's left.
+
+When the LLM fills the remaining slots, the prompt includes the
+`Recipe`s (and their ingredients) already sitting in the other slots
+for that week — so it's not suggesting blind. This serves two things:
+variety (don't suggest something too similar to a favourite already
+picked) and, usefully, ingredient overlap — the same mechanism that
+lets the shopping list merge shared ingredients after the fact
+(`risks-and-open-questions.md` §8) can nudge the LLM to lean into
+ingredients already in play for the week (e.g. suggest something else
+using chicken thighs if a favourite pick already needs them), reducing
+the basket rather than just merging it after the plan is fixed.
+
 ### Photo-to-recipe — doesn't need a specialist model at all
 
 Recognising a recipe card is essentially structured OCR; recreating a
@@ -181,7 +207,8 @@ in practice. Every entity below that isn't global hangs off a
   not household-scoped — they're shared, reusable content.
 - `WeeklyPlan` — household id, week id, list of `Suggestion` slots (N
   per week). One shared plan per household, not one per member.
-- `Suggestion` — slot id, current `Recipe`, refresh history, status
+- `Suggestion` — slot id, current `Recipe`, `filled_via`
+  (llm-suggestion / favourite-pick), refresh history, status
   (pending / accepted / dismissed-temporary / dismissed-permanent).
 - `Dismissal` — household id, user id (who dismissed it, kept for
   attribution and for reason context), recipe id, type
@@ -191,6 +218,11 @@ in practice. Every entity below that isn't global hangs off a
   permanent: from all future suggestions) regardless of which member
   triggered it. Permanent dismissals feed back into future suggestion
   prompts for the household as a whole.
+- `Favourite` — household id, user id (who favourited it, kept for
+  attribution), recipe id, timestamp. Effect is household-wide (any
+  member can pick it when filling a slot), and it feeds future
+  suggestion prompts as a positive signal — the mirror image of
+  `Dismissal`.
 - `ShoppingList` — household id, week id, merged ingredient lines
   (name, quantity, unit, source recipes), purchasable-quantity
   rounding applied.

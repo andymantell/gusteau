@@ -28,6 +28,16 @@ open questions in `risks-and-open-questions.md` are resolved.
   - Both kinds of dismissal apply to the whole household, not just
     the member who dismissed it — see `decisions.md`. Who dismissed
     it and why is still recorded.
+- Any good recipe can be **saved as a favourite**, regardless of where
+  it came from (LLM suggestion, photo-to-recipe, or manual entry).
+  Favouriting applies household-wide, mirroring dismissal.
+- When planning a week, the owner can **fill some of the N slots from
+  favourites** directly instead of an LLM suggestion, and have the LLM
+  **fill the remaining slots** — aware of which favourites have
+  already been picked for that week, so it can plan the rest around
+  them (variety, and ideally shared ingredients) rather than
+  suggesting blind. See `decisions.md` for how this fits the existing
+  refresh mechanic rather than being a separate planning mode.
 
 ## Recipe capture from a photo
 
