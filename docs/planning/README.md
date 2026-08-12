@@ -19,8 +19,9 @@ durability comes from Android Auto Backup to your own Google account.
 Comparing basket prices across several supermarkets is a post-v1
 enhancement — v1 goes end-to-end against Sainsbury's alone.
 
-This directory is the living plan. Nothing here is implemented until the
-plan is marked ready and the owner says go — see [status](#status) below.
+This directory is the living plan. Build status is in
+[status](#status) below; the code itself lives in `/app` (Flutter),
+`/infra` (CDK) and `.github/workflows` (CI/CD) at the repo root.
 
 ## Documents
 
@@ -35,7 +36,7 @@ plan is marked ready and the owner says go — see [status](#status) below.
 
 ## Status
 
-**Planning — scoped, no blocking unknowns.** All the originally-open
+**Planning is done — no blocking unknowns.** All the originally-open
 decisions are resolved (see `decisions.md`: assisted-first ordering,
 LLM strategy with an upfront validation spike, no recipe corpus,
 single-user local-first design, dismissals and favourites,
@@ -51,7 +52,39 @@ project; multi-retailer price comparison follows after that. This
 sequencing means the plan's former biggest risk (retailer data access,
 `risks-and-open-questions.md` §9) is off the critical path entirely.
 
-Nothing gets built until the owner says go.
+**Iteration 0 (foundations) is built** — see `iterations.md` for the
+full checklist. In the repo: the Flutter app skeleton with a tested
+Drift/SQLite layer (migrations, a pre-migration snapshot, a
+proxy-connection screen), Android Auto Backup wired up with the WAL
+checkpoint that makes it safe, the CDK proxy stack (API Gateway +
+Lambda `/health` stub + a monthly AWS Budget guard — real Bedrock
+calls land in iteration 1), and the three GitHub Actions workflows
+(`ci.yml`, `deploy.yml`, `release.yml`).
+
+**What's left before it's actually live is manual, on the owner's
+side, and can only be done by them** — everything CI-buildable is
+built:
+
+1. From AWS CloudShell: deploy `infra/github-oidc.yaml`, and generate
+   the Android signing keystore. Both are one-time — see `ci-cd.md`.
+2. In the GitHub repo settings: create a `production` Environment with
+   a required reviewer (so deploys are an approval tap from the mobile
+   app), and set the variables/secrets `ci-cd.md`'s "Secrets and
+   variables inventory" lists (`AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`,
+   `GUSTEAU_BUDGET_ALERT_EMAIL`, the four `ANDROID_KEYSTORE_*`/
+   `ANDROID_KEY_*` secrets).
+3. Push to `main` to trigger the first `deploy.yml` run, then fetch
+   the real API key value from the AWS console (the stack only outputs
+   its *ID* — deploy logs are public) and paste it, with the API URL,
+   into the app's connection screen once installed.
+4. Install the CI-built APK (a run artifact from `ci.yml` on `main`,
+   or a tagged `release.yml` build) and confirm the round trip to
+   `/health` actually works.
+5. Run the install-and-restore test on a real device — iteration 0's
+   one requirement that genuinely can't be done in CI.
+
+Iteration 1 (real Bedrock suggestions, replacing the `/health` stub)
+starts once the above is confirmed working.
 
 ## Ground rules for this plan
 
