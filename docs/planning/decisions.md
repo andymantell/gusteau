@@ -76,6 +76,10 @@ assumption into the data model or auth.
 **Why:** cheap to do correctly now, expensive to retrofit later, and
 the owner wants the option open even if it's never released.
 
+*(Reversed 2026-08-12 — see "One install, one user" below. Once
+local-first landed, carrying unused multi-tenancy stopped being cheap
+enough to justify.)*
+
 ## 2026-08-12 — Weekly plan and dismissal scope
 
 **Decided:** a `WeeklyPlan` is a single shared plan for the whole
@@ -89,6 +93,9 @@ the effect of the dismissal itself is household-wide.
 **Why:** confirmed by the owner directly. Also the more internally
 consistent design — a single shared plan can't sensibly have one
 member still seeing a recipe another member has ruled out.
+
+*(Moot from 2026-08-12 — with one user there is no scope question
+left. Dismissals simply apply.)*
 
 ## 2026-08-12 — Photo-to-recipe doesn't need cookery specialisation
 
@@ -352,3 +359,44 @@ test a hypothesis by switching one off. Storing reasons verbatim
 matters for the same reason: an LLM helpfully "improving" the owner's
 words into something they didn't say would reintroduce precisely the
 opacity this feature removes.
+
+## 2026-08-12 — One install, one user: the device is the "user"
+
+**Decided:** strip out the household and user layer entirely. One
+household is one device; one user per household; therefore the device
+*is* the user. No `Household` table, no `User` table, no owner id on
+any row, no accounts, no sign-up. Settings become a single row.
+Dismissals and favourites lose their attribution fields — there is
+only one person to attribute to. All the "household-wide" scoping
+language disappears because there is nothing to scope against.
+
+Cognito goes with it: with one device and no personal data behind the
+endpoint, the only thing authentication protects is the Bedrock
+budget, so the proxy is guarded by an **API Gateway API key in a usage
+plan**, held in the Android Keystore. The usage plan doubles as the
+rate limit and monthly quota. See `architecture.md`.
+
+**Supersedes** the earlier "structure as multi-household/multi-user"
+decision above, and closes `risks-and-open-questions.md` §11.
+
+**Why:** the owner's call, on the realistic assessment that it's going
+to be them and only them. The earlier multi-tenant decision was made
+on "cheap now, expensive later" grounds, and that reasoning weakened
+considerably once local-first landed — a device-local single-user
+database gains nothing from ownership columns, and multi-user would
+now need sync machinery regardless, so the schema was never going to
+be the hard part of that retrofit anyway. Against that, the cost of
+carrying it is paid continuously: a scoping predicate on every query,
+attribution on every write, and a user concept threaded through every
+screen. Certain cost, unlikely benefit.
+
+**The trade being accepted, stated plainly:** if this ever does need
+multiple users, it's a real migration — ownership columns, backfill,
+and sync. That was accepted knowingly rather than overlooked.
+
+**Also accepted:** a long-lived API key is weaker than rotating
+tokens. Mitigated by hardware-backed Keystore storage, by the key
+granting nothing but "relay a prompt to Bedrock", by the usage-plan
+quota capping what a leaked key could cost, and by being trivially
+rotatable. Cognito remains the fallback if proper token rotation is
+ever wanted.

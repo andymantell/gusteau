@@ -20,8 +20,8 @@ scope for MVP versus later is expressed by the build order in
 
 ## Plan configuration — portions and meals per week
 
-- A **settings screen** holds the household defaults: **portions per
-  meal** and **number of meals per week**.
+- A **settings screen** holds the defaults: **portions per meal** and
+  **number of meals per week**.
 - When planning a new week, both are **surfaced as overridable for
   that week** — a one-off "cooking for 6 this week" or "only need 3
   meals" without changing the defaults. Defaults are pre-filled, so
@@ -48,13 +48,9 @@ scope for MVP versus later is expressed by the build order in
     weeknight"). Reasons are structured/stored so they can be fed back
     into future LLM prompts as standing preferences, not just used to
     filter a blocklist.
-  - Both kinds of dismissal apply to the whole household, not just
-    the member who dismissed it — see `decisions.md`. Who dismissed
-    it and why is still recorded.
 - Any good recipe can be **saved as a favourite**, regardless of where
   it came from (LLM suggestion, photo-to-recipe, or manual entry).
-  Favourites live in the on-device database. Favouriting applies
-  household-wide, mirroring dismissal.
+  Favourites live in the on-device database.
 - When planning a week, the owner can **fill some of the N slots from
   favourites** directly instead of an LLM suggestion, and have the LLM
   **fill the remaining slots** — aware of which favourites have
@@ -65,7 +61,7 @@ scope for MVP versus later is expressed by the build order in
 
 ## The personalised prompt is visible and editable
 
-- Everything the app has learned about the household's tastes is held
+- Everything the app has learned about your tastes is held
   as a **list of individual preference rules**, not one opaque blob of
   text, and that list is **a screen in the app**.
 - Permanently dismissing a recipe with a reason **visibly adds a rule**
@@ -130,7 +126,7 @@ scope for MVP versus later is expressed by the build order in
   become a specific, orderable product (which meat, what fat content,
   which product tier). The app resolves this by generating precise
   ingredients in the first place, inferring from dish context where a
-  photographed recipe is vague, and applying standing household
+  photographed recipe is vague, and applying standing
   preferences — **asking only when a choice is genuinely new and
   consequential, and remembering the answer permanently.** Questions
   are batched into the basket-review step, never interrupting meal
@@ -143,7 +139,7 @@ scope for MVP versus later is expressed by the build order in
 ## Pantry staples
 
 - **Don't reorder things already in the cupboard.** Olive oil, salt,
-  spices, flour, condiments and similar are marked as household
+  spices, flour, condiments and similar are marked as pantry
   staples and excluded from the weekly basket by default.
 - **Threshold-aware, not blunt:** "2 tbsp olive oil" is skipped, but a
   recipe wanting 500ml is ordered. Same for butter, flour, and
@@ -189,16 +185,15 @@ scope for MVP versus later is expressed by the build order in
   substituting. (The retailer-neutral preference storage this needs is
   already being built in v1.)
 
-## Household / multi-user
+## Single user, single device
 
-- The **schema** is built as multi-household/multi-user from the
-  start, not hard-coded to a single owner — see `decisions.md`.
-- **v1 runs on a single device**, which is what local-first implies:
-  true multi-user across two phones needs sync, which is a post-v1
-  feature. The schema not needing a retrofit is the point.
-- No public sign-up flow; this stays a personal tool.
-- One shared weekly plan per household; dismissals (temporary or
-  permanent) apply household-wide — see `decisions.md`.
+- **One install, one user.** No accounts, no sign-up, no user or
+  household records, no owner id on any row — the device *is* the
+  user. See `decisions.md`.
+- Everything the app stores is implicitly "mine", so there's no
+  scoping, sharing, attribution or merging anywhere in the design.
+- A second device would be a second, separate install with its own
+  data. Moving phones is an export/import, not a sync.
 
 ## Security
 

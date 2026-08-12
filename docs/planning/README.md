@@ -36,7 +36,7 @@ plan is marked ready and the owner says go — see [status](#status) below.
 **Planning — scoped, no blocking unknowns.** All the originally-open
 decisions are resolved (see `decisions.md`: assisted-first ordering,
 LLM strategy with an upfront validation spike, no recipe corpus,
-multi-household data model, household-wide dismissals and favourites,
+single-user local-first design, dismissals and favourites,
 £15/month Lambda-first budget, ingredient disambiguation, pantry
 staples).
 
@@ -53,8 +53,8 @@ Nothing gets built until the owner says go.
 
 - **Local-first.** The device stores the data and does the computing;
   AWS earns its place only where the device genuinely can't do the job.
-- Personal use — no public sign-up. The schema is multi-household, but
-  v1 is one household on one device.
+- **One install, one user, no accounts.** The device is the user;
+  nothing in the schema is owned by anybody.
 - **No hidden learned state.** Anything the app infers about the owner
   is visible and editable, including the LLM prompt itself.
 - Security is a first-class requirement, not a later pass, because a

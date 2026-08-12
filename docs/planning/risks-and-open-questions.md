@@ -31,14 +31,11 @@ supplement — kept only if it demonstrably wins.
 
 ## 4. Household scope
 
-**Resolved 2026-08-12 — see `decisions.md`.** Model `Household` and
-`User` as first-class from the start, even though it'll likely only
-ever run for a household of one.
-
-**Follow-on question this raised — resolved 2026-08-12, see
-`decisions.md`.** A `WeeklyPlan` is a single shared plan for the whole
-household, and dismissing a recipe (temporary or permanent) removes it
-for everyone, not just the member who dismissed it.
+**Resolved 2026-08-12, then reversed the same day — see
+`decisions.md`.** Originally: model `Household` and `User` as
+first-class from the start. Superseded by **one install, one user, no
+account** — the device is the user, and there are no household, user,
+or ownership concepts anywhere in the schema.
 
 ## 5. Payment mechanics, concretely
 
@@ -54,9 +51,9 @@ method already saved on the retailer account.
 
 **Resolved 2026-08-12 — see `decisions.md`.** No external recipe
 corpus for MVP — the owner doesn't have one and sourcing one isn't
-worth it for a single-household tool. Suggestion generation relies on
-the model's own knowledge plus the household's own preference/
-dismissal history (which the app generates itself). The app's own
+worth it for a personal tool. Suggestion generation relies on the
+model's own knowledge plus the app's own accumulated preference and
+dismissal history (which it generates itself). The app's own
 accepted/photo-derived recipes can become a self-built, optional RAG
 source later once there's enough history. A free ingredient/nutrition
 database (e.g. Open Food Facts) remains a candidate for the
@@ -146,7 +143,7 @@ three more retailers, where the floor is *not* acceptable — a price
 comparison built on estimated prices would be worse than none. That's
 the bar the deferred comparison feature has to clear.
 
-**Local-first changes one input to this spike** (see §11): fetching
+**Local-first changes one input to this spike:** fetching
 from the device uses a residential mobile IP, which is far less likely
 to trip bot protection than AWS IP ranges — a real point in favour of
 on-device fetching. Against it, parsing logic on the device can only
@@ -176,18 +173,16 @@ Open question: is auto-backup plus manual export enough for the
 owner's comfort, or should backup be designed in earlier? Cheap to
 decide once the app is in real use and the data actually matters.
 
-## 11. Sync — what unlocks true multi-user *(open, post-v1)*
+## 11. Multi-user and sync
 
-Local-first and the multi-household schema (`decisions.md`) are in
-tension: two members on two phones are two disconnected systems.
-Resolved for now by accepting **v1 is single-device** while keeping
-the schema multi-user-shaped, so nothing needs retrofitting — see
-`architecture.md`, "Multi-user, revisited."
+**Closed 2026-08-12 — see `decisions.md`.** Not deferred; removed.
+One install, one user, no accounts, no sync. A second device would be
+a separate install with its own data, and moving phones is an
+export/import (§10), not a sync.
 
-If sync is ever wanted, the open questions are what shape it takes
-(a hosted sync service, a CRDT-based peer sync, or a simple
-last-writer-wins push to a private store), how it squares with the
-£15/month ceiling and the no-cloud-data privacy property that
-local-first just bought, and whether it's actually worth it for a
-household that may only ever have one active user. Worth noting it
-would solve §10 in passing.
+Noted for the record: reversing this later would be a real migration —
+adding ownership columns, backfilling them, and building whatever sync
+mechanism multi-user implies. That cost was accepted knowingly, on the
+grounds that it's overwhelmingly likely to be a single user forever,
+and that carrying unused multi-tenancy through every query and screen
+in the meantime is a certain cost paid against an unlikely benefit.

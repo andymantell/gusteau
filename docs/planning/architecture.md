@@ -15,31 +15,38 @@ meet the quality bar this app depends on.
 Everything else — the database, all the planning and shopping-list
 logic, every screen's state — lives on the device.
 
+**The device is the user.** One install, one user, one set of
+preferences. There is no account, no household, no user record, no
+sign-up, and no owner id on anything — see `decisions.md`. The app's
+data is simply *the* data, and the phone's own lock screen is what
+protects it.
+
 ```
-Flutter app (Android)  ◀── the system of record
+Flutter app (Android)  ◀── the system of record, and the "user"
 │
 ├── Local DB (SQLite)        recipes, favourites, dismissals,
 │                            preference rules, plans, shopping lists,
-│                            ingredient preferences, pantry staples
+│                            ingredient preferences, pantry staples,
+│                            settings
 ├── On-device logic          ingredient merge, staple exclusion,
 │                            quantity/pack rounding, unit conversion,
 │                            prompt assembly, basket/checklist build
 ├── Local photo store        captured recipe cards and food photos
 │
-└── HTTPS (Cognito-authenticated) ──▶ AWS
-                                      │
-                                      └── Inference proxy Lambda
-                                            └── Bedrock
-                                                  · recipe suggestions
-                                                  · photo → recipe
+└── HTTPS + API key ──▶ AWS
+                         │
+                         └── Inference proxy Lambda
+                               └── Bedrock
+                                     · recipe suggestions
+                                     · photo → recipe
 
     (+ Sainsbury's product data — on-device or via a fetch Lambda,
        decided by the §9 spike; see "Retailer data" below)
 ```
 
-**No household data is stored in AWS.** No DynamoDB, no S3 bucket of
-photos, no server-side copy of what you like or dislike. The cloud
-sees a prompt and returns a completion.
+**No personal data is stored in AWS.** No DynamoDB, no S3 bucket of
+photos, no server-side copy of what you like or dislike, no user
+accounts. The cloud sees a prompt and returns a completion.
 
 ### What this buys
 
@@ -54,18 +61,26 @@ sees a prompt and returns a completion.
   supermarket all work with no signal. Only suggestion generation and
   photo-to-recipe need connectivity.
 - **Latency.** No network round-trip for anything but inference.
+- **Simplicity.** With one device as the sole user, there are no
+  ownership columns, no scoping predicates on every query, no
+  attribution to record, no sign-up flow, no account recovery, and no
+  merge conflicts. A large amount of ordinary app plumbing simply
+  doesn't get written.
 
 ### What it costs — and the mitigations
 
 - **Device loss = data loss.** The accumulated favourites, dismissal
-  reasons and preference rules *are* the product's value. Mitigations,
+  reasons and preference rules *are* the product's value, and with no
+  account behind them there is nothing to restore from. Mitigations,
   in iteration order: Android auto-backup on from day one; explicit
   JSON export/import the owner can run any time and stash wherever
   they like; optional encrypted cloud backup as a post-v1 addition if
-  the local-only story ever feels too thin. Tracked as a risk in
+  the local-only story ever feels too thin. This is the single
+  sharpest edge of the design — tracked in
   `risks-and-open-questions.md` §10.
-- **Multi-device and true multi-user need sync**, which local-first
-  doesn't give for free — see "Multi-user, revisited" below.
+- **A second device is a second, separate install** with its own data.
+  Accepted deliberately (see `decisions.md`); moving phones is an
+  export/import, not a sync.
 - **Logic ships in the app**, so fixing a bug means shipping a build
   rather than deploying a Lambda. Acceptable for a personal
   sideloaded app; worth remembering when the retailer-adapter parsing
@@ -82,7 +97,7 @@ The app is the whole product; everything below runs on the handset.
 - **On-device logic** for everything that's plain computation:
   cross-recipe ingredient merging, pantry-staple exclusion, pack-size
   rounding, unit conversion, shopping-list assembly, basket/checklist
-  construction, and assembling the LLM prompt from the household's
+  construction, and assembling the LLM prompt from your
   preference rules. None of this needs a server, so none of it gets
   one.
 - **Photos stay on the device.** Captured images are resized and
@@ -111,24 +126,39 @@ Deliberately small. One stack, a handful of resources, no data stores.
   - enforce a request rate limit and a monthly spend guard, the
     active control that keeps Bedrock inside budget;
   - be the one place to add cost logging.
-- **Cognito** authenticates the device to that endpoint. Its role is
-  narrower than before: it protects the *inference budget*, not stored
-  data, because there is no stored data. Still worth having — an
-  unauthenticated Bedrock relay on the public internet is somebody
-  else's free LLM.
+- **Auth: an API Gateway API key**, generated at setup and stored in
+  the Android Keystore. With exactly one device and no personal data
+  behind the endpoint, the only thing authentication protects is the
+  *inference budget* — so the mechanism should be proportionate to
+  that. An API key in a **usage plan** is neat here because the usage
+  plan *is* the rate limit and quota: throttle and monthly cap are
+  configured declaratively rather than coded.
 - **CloudWatch** for proxy logs and the billing alarm. Short retention
   (2 weeks). No personal data in logs: log token counts and latency,
   never prompt or completion bodies.
-- **No DynamoDB, no S3, no Secrets Manager, no VPC.** Nothing to put
-  in them.
+- **No DynamoDB, no S3, no Secrets Manager, no VPC, no Cognito.**
+  Nothing to put in them, and nobody to authenticate.
+
+**Considered and rejected: Cognito.** A user pool for a single user
+who never signs up, never signs in on a second device, and has no
+server-side data to protect is ceremony without benefit. Dropped when
+the one-device/one-user decision landed.
 
 **Considered and rejected: a Cognito Identity Pool handing the device
 scoped IAM credentials to call Bedrock directly**, removing the Lambda
-and API Gateway entirely. It's cheaper still and appealingly simple,
-but it puts usable AWS credentials on the handset and gives up the
-single control point for rate limiting, model pinning and spend
-guarding — a poor trade when the whole cost model rests on Bedrock
-usage staying bounded. The proxy stays.
+and API Gateway entirely. Cheaper still and appealingly simple, but it
+puts usable AWS credentials on the handset and gives up the single
+control point for rate limiting, model pinning and spend guarding — a
+poor trade when the whole cost model rests on Bedrock usage staying
+bounded. The proxy stays.
+
+**The trade being accepted:** a long-lived API key is weaker than
+rotating tokens. It's mitigated by hardware-backed Keystore storage,
+by the key granting nothing but "relay a prompt to Bedrock", by the
+usage-plan quota capping what a leaked key could cost, and by being
+trivially rotatable. If the owner would rather have proper token
+rotation, Cognito is the fallback — but for one device guarding one
+budget, this is the proportionate choice.
 
 ### Retailer data
 
@@ -139,23 +169,6 @@ less likely to trip bot protection than requests from AWS IP ranges.
 Against that, parsing logic on the device can only be fixed by
 shipping a build. The spike should weigh both; on-device is the
 default under this architecture unless it proves unworkable.
-
-## Multi-user, revisited
-
-The earlier decision to model `Household` and `User` as first-class
-(`decisions.md`) is in genuine tension with local-first: if the phone
-is the system of record, two household members on two phones have two
-disconnected systems. Sync is the missing piece, and local-first
-doesn't provide it for free.
-
-**Resolution:** keep the schema multi-user-shaped — households, users,
-attribution on dismissals and favourites — exactly as designed, but
-accept that **v1 is single-device**. That preserves the cheap-now,
-expensive-later property the original decision was about (the schema
-doesn't have to be retrofitted) without pretending v1 delivers
-multi-user. Real multi-user is unlocked by sync, which becomes the
-post-v1 feature that would deliver it, and would also solve the
-device-loss problem in passing. Nothing about v1 forecloses it.
 
 ## Cost and frugality
 
@@ -172,10 +185,11 @@ cloud, **Bedrock tokens are essentially the only line on the bill.**
   spend guard in the proxy Lambda, which is the active control rather
   than just a warning.
 - **Lambda and API Gateway** stay inside the free tier at this volume
-  — a few inference calls a week rounds to £0.
-- **Cognito** is free at this scale.
-- **No DynamoDB, S3, Secrets Manager, or vector store** — the
-  local-first design removes them rather than optimising them.
+  — a few inference calls a week rounds to £0. The API Gateway usage
+  plan's quota is a hard ceiling on how many calls are even possible.
+- **No DynamoDB, S3, Secrets Manager, Cognito, or vector store** — the
+  local-first, single-user design removes them rather than optimising
+  them.
 - **No NAT Gateway, ever.** The classic way a "cheap" serverless app
   quietly costs £25+/month: it bills per hour just for existing. The
   proxy Lambda reaches Bedrock over the SDK with no VPC, so there is
@@ -215,7 +229,7 @@ both prompts, rather than being decided independently by each:
 ### Recipe suggestion generation — this is where "specialist" matters
 
 This is the part that benefits from cookery-specific framing: it needs
-to reason about substitutions, weigh a household's accumulated
+to reason about substitutions, weigh accumulated
 preferences and dismissal reasons, and produce well-formed, varied
 weekly suggestions. Bedrock doesn't offer an off-the-shelf "cookery"
 foundation model, so "specialist" needs to be built rather than picked
@@ -266,7 +280,7 @@ Given that, the plan for suggestion generation is:
 2. **Primary path — prompt engineering on a strong general model**
    (e.g. a Claude model on Bedrock, at whichever tier the spike
    above settles on): a system prompt encoding cookery expertise, with
-   the household's standing preferences and dismissal reasons injected
+   your standing preferences and dismissal reasons injected
    into every request. **No external recipe corpus required** — see
    "Grounding data" below for why, and where a retrieval step fits in
    later without needing one upfront. Fast to build, easy to iterate,
@@ -283,7 +297,7 @@ Given that, the plan for suggestion generation is:
    **Scoped to suggestion generation only** — see below for why it
    doesn't apply to the photo feature.
 4. **Fine-tuning our own model** stays as a later option, not pursued
-   now — for a single-household tool the effort of maintaining a
+   now — for a personal tool the effort of maintaining a
    training pipeline is hard to justify unless the spike and its
    follow-ups both prove insufficient.
 
@@ -291,24 +305,24 @@ Given that, the plan for suggestion generation is:
 
 The original plan assumed a curated recipe corpus to ground
 suggestions via RAG. The owner doesn't have one, and sourcing one
-upfront isn't worth the effort for a single-household tool, so that
+upfront isn't worth the effort for a personal tool, so that
 requirement is dropped:
 
 - **The model's own training knowledge is the baseline.** A frontier
   general model already has broad culinary knowledge — no retrieval
   needed to produce reasonable, varied recipes on its own.
 - **The data that actually needs to be "retrieved" per request is the
-  household's own preferences and dismissal history** (already in the
+  app's own preferences and dismissal history** (already in the
   data model — `Dismissal`, accepted `Recipe`s), which is generated by
   using the app, not sourced externally. This is the part that matters
   for personalisation, and it exists regardless of any external
   corpus.
 - **The corpus grows itself, if one ever helps.** Every recipe the
-  household accepts, or that gets reconstructed via photo-to-recipe,
+  owner accepts, or that gets reconstructed via photo-to-recipe,
   is already persisted as a `Recipe`. Once that history has enough
   volume, it can double as a lightweight, self-built RAG source (e.g.
   "you already had something similar to X two weeks ago", or
-  grounding substitutions in dishes the household is known to like) —
+  grounding substitutions in dishes known to go down well) —
   worth revisiting once there's real usage data, not before.
 - **If broader inspiration beyond the model's own knowledge is ever
   wanted**, a free dataset (e.g. TheMealDB) or nutrition/ingredient
@@ -319,7 +333,7 @@ requirement is dropped:
 
 #### The personalised prompt is a visible, editable list
 
-Everything the app learns about the household's tastes is stored as a
+Everything the app learns about your tastes is stored as a
 **list of discrete `PreferenceRule` records**, never as an opaque blob
 of accumulated text — and that list is a first-class screen in the
 app, not a hidden internal.
@@ -342,7 +356,7 @@ app, not a hidden internal.
   able to toggle one off is the fastest way to test whether a rule is
   making suggestions worse.
 - **Rules can be added by hand**, without a dismissal prompting them —
-  the list is the household's standing brief to the model, however it
+  the list is your standing brief to the model, however it
   got there.
 - **The assembled prompt is viewable.** A "see the full prompt"
   affordance shows exactly what gets sent, rules and all. If the app
@@ -366,7 +380,7 @@ for exactly the same reason.
 #### Favourites — the positive mirror of dismissal, and filling the week
 
 A saved favourite is treated as the positive counterpart to a
-permanent dismissal: both are household-wide preference signal that
+permanent dismissal: both are preference signal that
 gets fed back into the suggestion prompt (favourites push towards a
 style/cuisine/flavour profile, dismissal reasons push away from one).
 
@@ -395,7 +409,7 @@ Recognising a recipe card is essentially structured OCR; recreating a
 recipe from a photo of food is general visual reasoning plus the kind
 of broad food/cooking world-knowledge any strong frontier model
 already has — neither needs cookery-specific fine-tuning nor the
-household preference context used for suggestions. So this stays
+the preference context used for suggestions. So this stays
 deliberately simple:
 
 - A single call to the same general multimodal Bedrock model used for
@@ -413,7 +427,7 @@ deliberately simple:
 
 ## Portions and recipe scaling
 
-Portion count is set per week (defaulting from household settings) and
+Portion count is set per week (defaulting from settings) and
 applies uniformly to every meal in that week — no per-meal override,
 by design. It has to reach the actual ingredient quantities, or the
 shopping list is wrong.
@@ -473,7 +487,7 @@ rung sees few:
    dish (a bolognese means beef; a moussaka means lamb) as part of
    normalising the recipe. Inferred values are marked as inferred, not
    presented as though the source said so.
-3. **Apply standing household preferences.** Choice of product tier is
+3. **Apply standing preferences.** Choice of product tier is
    a personal standing preference, not a per-recipe fact: "own-brand
    standard range unless I say otherwise", "always 12% beef mince",
    "never the value range for meat". Once expressed, these resolve (3)
@@ -531,7 +545,7 @@ worth it for a personal tool.
 **What's proposed instead: assume, disclose, and let the human be the
 sensor.**
 
-- A household **`PantryStaple` list** marks ingredients assumed to be
+- A **`PantryStaple` list** marks ingredients assumed to be
   in the cupboard — cooking oils, vinegars, salt/pepper, dried herbs
   and spices, flour, sugar, stock, condiments, and whatever else the
   owner keeps in. These are excluded from the shopping list by
@@ -574,102 +588,90 @@ like-for-like across retailers automatically.
 
 ## Data model (sketch)
 
-**This is the on-device SQLite schema.** There is no cloud copy — see
-"Shape: local-first". Modelled as multi-household/multi-user from the
-start (see `decisions.md` and "Multi-user, revisited"), even though v1
-runs on a single device for a single household.
+**This is the on-device SQLite schema, and the only copy that
+exists** — see "Shape: local-first". There are no `Household` or
+`User` tables and no owner columns anywhere: the install is the user,
+so everything below is implicitly "mine" (see `decisions.md`).
 
-- `Household` — id, name, members, and settings: `default_portions`,
-  `default_meals_per_week`. These seed each new `WeeklyPlan` and are
-  edited on the settings screen.
-- `User` — id, household id, display name, auth identity (Cognito
-  sub), own preference profile.
+- `Settings` — a single row: `default_portions`,
+  `default_meals_per_week`, and whatever else accumulates. Seeds each
+  new `WeeklyPlan`; edited on the settings screen.
 - `Recipe` — id, title, `serves` (the portion count these quantities
   are written for), ingredients[with qty+unit], method, source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /
-  manual), tags (cuisine, time, difficulty). Recipes themselves are
-  not household-scoped — they're shared, reusable content. Scaled
-  re-expressions are cached as variants keyed on
-  `(recipe_id, serves)` — see "Portions and recipe scaling" above.
-- `WeeklyPlan` — household id, week id, `portions` and `meal_count`
-  (seeded from household defaults, overridable per week), and a list
-  of `Suggestion` slots, `meal_count` of them. One shared plan per
-  household, not one per member.
+  manual), tags (cuisine, time, difficulty). Scaled re-expressions are
+  cached as variants keyed on `(recipe_id, serves)` — see "Portions
+  and recipe scaling" above.
+- `WeeklyPlan` — week id, `portions` and `meal_count` (seeded from
+  settings, overridable per week), and `meal_count` `Suggestion`
+  slots.
 - `Suggestion` — slot id, current `Recipe`, `filled_via`
   (llm-suggestion / favourite-pick / photo-capture / manual-pick),
   refresh history, status (pending / accepted / dismissed-temporary /
   dismissed-permanent).
-- `Dismissal` — household id, user id (who dismissed it, kept for
-  attribution and for reason context), recipe id, type
-  (temporary/permanent), reason (free text + optional structured
-  category), timestamp. Effect is always household-wide — a dismissal
-  removes the recipe from the shared plan (temporary: this week only;
-  permanent: from all future suggestions) regardless of which member
-  triggered it. Permanent dismissals feed back into future suggestion
-  prompts for the household as a whole.
-- `Favourite` — household id, user id (who favourited it, kept for
-  attribution), recipe id, timestamp. Effect is household-wide (any
-  member can pick it when filling a slot), and it feeds future
-  suggestion prompts as a positive signal — the mirror image of
-  `Dismissal`.
-- `PreferenceRule` — household id, the rule text (verbatim as
-  written), enabled flag, sort order, provenance (derived from a
-  dismissal, with the originating recipe id — or added by hand), user
-  id, created/updated timestamps. The enabled rules are what the
-  suggestion prompt is assembled from, and the list is directly
-  editable by the owner — see "The personalised prompt is a visible,
-  editable list" above.
-- `ShoppingList` — household id, week id, merged ingredient lines
-  (name, quantity, unit, source recipes), purchasable-quantity
-  rounding applied. Each line also carries how it was resolved
-  (from recipe / inferred / standing preference / owner-answered) and
-  a confidence flag, so the review screen knows what to highlight.
-- `IngredientPreference` — household id, normalised ingredient key
-  ("beef mince"), the retailer-neutral resolved spec (variant, grade/
-  fat content, preferred pack size, product tier), how it was
-  established (asked / inferred / default), and timestamps. Plus an
-  optional per-retailer product-ID cache on top of the neutral spec,
-  revalidated rather than trusted indefinitely. This is what makes
-  "never ask twice" work — see "Ingredient specificity and product
-  preferences" above.
-- `PantryStaple` — household id, normalised ingredient key (joins to
+- `Dismissal` — recipe id, type (temporary/permanent), reason (free
+  text + optional structured category), timestamp. Temporary removes
+  the recipe for the current week; permanent removes it from all
+  future suggestions and produces a `PreferenceRule`.
+- `Favourite` — recipe id, timestamp. Feeds future suggestion prompts
+  as a positive signal — the mirror image of `Dismissal`.
+- `PreferenceRule` — the rule text (verbatim as written), enabled
+  flag, sort order, provenance (derived from a dismissal, with the
+  originating recipe id — or added by hand), created/updated
+  timestamps. The enabled rules are what the suggestion prompt is
+  assembled from, and the list is directly editable — see "The
+  personalised prompt is a visible, editable list" above.
+- `ShoppingList` — week id, merged ingredient lines (name, quantity,
+  unit, source recipes), purchasable-quantity rounding applied. Each
+  line also carries how it was resolved (from recipe / inferred /
+  standing preference / answered) and a confidence flag, so the review
+  screen knows what to highlight.
+- `IngredientPreference` — normalised ingredient key ("beef mince"),
+  the retailer-neutral resolved spec (variant, grade/fat content,
+  preferred pack size, product tier), how it was established (asked /
+  inferred / default), and timestamps. Plus an optional per-retailer
+  product-ID cache on top of the neutral spec, revalidated rather than
+  trusted indefinitely. This is what makes "never ask twice" work —
+  see "Ingredient specificity and product preferences" above.
+- `PantryStaple` — normalised ingredient key (joins to
   `IngredientPreference` on the same key), assumed-in-stock flag,
-  quantity threshold above which a recipe's use of it counts as a
-  shop rather than a staple, typical purchase pack size,
-  running-low flag (owner-set), last-purchased date, and a count of
-  planned recipes drawing on it since then to drive the soft
-  depletion nudge. See "Pantry staples" above.
-- `BasketQuote` — household id, retailer, shopping list id, line-item
-  matches, total price, availability/substitution notes, fetched-at
-  timestamp. v1 only ever holds one of these per shopping list
-  (Sainsbury's); the shape already supports several per list, which is
-  what post-v1 price comparison needs.
-- `Order` — household id, retailer, basket snapshot, delivery slot
-  (recorded by the owner post-handoff), status (quoted → handed-off →
-  confirmed, plus abandoned). If full checkout automation is ever
-  added for a retailer, this gains the slot-reserved/placed/failed
-  states that flow would need — not modelled until then.
+  quantity threshold above which a recipe's use of it counts as a shop
+  rather than a staple, typical purchase pack size, running-low flag,
+  last-purchased date, and a count of planned recipes drawing on it
+  since then to drive the soft depletion nudge. See "Pantry staples"
+  above.
+- `BasketQuote` — retailer, shopping list id, line-item matches, total
+  price, availability/substitution notes, fetched-at timestamp. v1
+  only ever holds one per shopping list (Sainsbury's); the shape
+  already supports several, which is what post-v1 price comparison
+  needs.
+- `Order` — retailer, basket snapshot, delivery slot (recorded
+  post-handoff), status (prepared → handed-off → confirmed, plus
+  abandoned). If full checkout automation is ever added for a
+  retailer, this gains the slot-reserved/placed/failed states that
+  flow would need — not modelled until then.
 
-Suggestion generation reads every household member's active
-preferences and dismissal history and pools them into the prompt
-context for that household's single shared plan, rather than
-personalising per member.
+Suggestion generation assembles the prompt from the enabled
+`PreferenceRule`s, plus favourites and dismissal history, with no
+scoping or merging to do — there is only one set of preferences.
 
 Dismissals, favourites, preference rules and accepted-recipe history
 are the app's accumulating value — losing them means the suggestion
-engine forgets everything it has learned. Because they live on the
-device, durability is a device-backup problem: Android auto-backup
-enabled from iteration 1, plus a manual JSON export/import the owner
-controls. See `risks-and-open-questions.md` §10.
+engine forgets everything it has learned, with no account to restore
+from. Durability is therefore a device-backup problem: Android
+auto-backup enabled from iteration 0, plus a manual JSON
+export/import. See `risks-and-open-questions.md` §10.
 
 ## Security posture
 
-Two decisions make the v1 security story unusually strong. The
+Three decisions make the v1 security story unusually strong. The
 assisted-handoff posture means **Gusteau holds no card data and no
 retailer credentials at all** — payment and retailer login only ever
 happen on Sainsbury's own app. Local-first means **there is no cloud
-database to breach**: no account holding your eating habits, no bucket
-of your food photos, nothing server-side to leak.
+database to breach**: no bucket of your food photos, nothing
+server-side to leak. And single-user means **there is no account at
+all** — nothing to phish, no password to reuse, no recovery flow to
+socially engineer.
 
 That does move the centre of gravity, though — the data now sits on a
 phone, so the phone's protections are the data's protections:
@@ -687,7 +689,7 @@ phone, so the phone's protections are the data's protections:
 - **The proxy sees prompts, so keep them out of logs.** Log token
   counts, latency and errors — never prompt or completion bodies.
   Bedrock's own data-retention behaviour is worth confirming during
-  the iteration-1 spike, since prompts carry household preferences.
+  the iteration-1 spike, since prompts carry personal preferences.
 
 The rules below are standing policy, stated so they survive any future
 move toward automation or cloud sync:
@@ -701,8 +703,8 @@ move toward automation or cloud sync:
   for a retailer, its credentials go in Secrets Manager, readable only
   by the Ordering Service's execution role — and that expansion gets
   its own security review before it ships.
-- All traffic TLS; the inference endpoint requires an authenticated
-  Cognito identity; local biometric/PIN gate on the app itself.
+- All traffic TLS; the inference endpoint requires the API key, held
+  in the Android Keystore; local biometric/PIN gate on the app itself.
 - Anything money-adjacent (basket handed off, order confirmed) is
   recorded as an auditable local event with who/what/when — not just
   debug output.

@@ -14,14 +14,13 @@ four.
 - Flutter app skeleton with the **local SQLite layer** (Drift or
   equivalent) and migration tooling — this is the system of record, so
   it gets set up properly on day one.
-- `Household`/`User` in the local schema from the start (see
-  `architecture.md`), even though v1 is one household on one device.
 - Android auto-backup enabled and **verified to actually capture the
   app database** (see `risks-and-open-questions.md` §10).
-- CDK app skeleton (Python): Cognito user pool, API Gateway HTTP API,
-  and the **inference proxy Lambda** — no VPC, no NAT, no ALB, no data
-  stores. See `architecture.md`, "Cost and frugality."
-- App authenticates to the proxy and gets a round-trip response back.
+- CDK app skeleton (Python): API Gateway HTTP API with an API key and
+  usage plan, plus the **inference proxy Lambda** — no VPC, no NAT, no
+  ALB, no data stores, no Cognito. See `architecture.md`.
+- App stores its API key in the Android Keystore, calls the proxy and
+  gets a round-trip response back.
 - CI: lint/test for both Flutter and CDK (Python); manual-trigger
   deploy is fine for a personal project.
 - CloudWatch billing alarm at **£15/month**, plus the proxy's own rate
@@ -43,8 +42,8 @@ four.
 - Bedrock integration for recipe suggestion generation (general model,
   cookery-focused prompting, no external corpus — see
   `architecture.md`).
-- `WeeklyPlan` / `Suggestion` / `Recipe` in the local schema,
-  including household default portions and meals per week, and the
+- `Settings` / `WeeklyPlan` / `Suggestion` / `Recipe` in the local
+  schema, including default portions and meals per week, and the
   per-week overrides of both.
 - On-device prompt assembly; the proxy relays it to Bedrock.
 - "Suggest N recipes for the week" + per-suggestion refresh, with the
@@ -59,8 +58,8 @@ four.
 
 ## Iteration 2 — Preferences: favourites, dismissals, editable prompt
 - Temporary vs. permanent dismissal, reason capture UI.
-- Favouriting a recipe (household-wide, works on any `Recipe`
-  regardless of source), stored locally.
+- Favouriting a recipe (works on any `Recipe` regardless of source),
+  stored locally.
 - **`PreferenceRule` list and its screen** — the personalised prompt
   as an editable list rather than a hidden blob: rules created
   visibly from permanent dismissals, hand-addable, each one editable /
@@ -162,10 +161,9 @@ weekly. Known candidates, roughly in the order they seem worth doing:
   retailer, and like-for-like matching (already designed for: see
   `architecture.md`, "Ingredient specificity and product
   preferences").
-- **Sync across devices** — what would unlock true multi-user, and
-  would solve device-loss backup in passing
-  (`risks-and-open-questions.md` §10, §11). Needs to be squared with
-  the no-cloud-data privacy property local-first just bought.
+- **Encrypted cloud backup**, if local-only ever feels too thin
+  (`risks-and-open-questions.md` §10). Would need squaring with the
+  no-cloud-data privacy property local-first just bought.
 - **Fully automated checkout** for a specific retailer, if ever wanted
   — separately scoped, with its own security review (`decisions.md`).
 - From the "not yet specified" list in `requirements.md`: nutrition
