@@ -561,3 +561,28 @@ requiring an uninstall that destroys the local database, with Auto
 Backup unable to help since restore is tied to the same signing
 identity. It therefore needs storing outside GitHub secrets too, which
 are write-only. Noted in `risks-and-open-questions.md` §10.
+
+## 2026-08-12 — CI supply chain: first-party actions only
+
+**Decided:** workflows use only actions from the `actions/*`
+organisation, SHA-pinned rather than tag-pinned. Everything else is
+hand-rolled bash. Concretely this replaces
+`aws-actions/configure-aws-credentials` with a direct OIDC token
+request plus `sts:assume-role-with-web-identity`,
+`subosito/flutter-action` with a cached SDK download, and
+`softprops/action-gh-release` with `gh release create`. See `ci-cd.md`
+for the shell.
+
+**Why:** the owner's call, and correct. A third-party action executes
+arbitrary code on the runner with whatever secrets that step can see —
+and in the deploy workflow that includes the OIDC token, which *is*
+the access to the AWS account. A compromised action or maintainer
+account is a direct route in. Nothing mitigates that adequately when
+the alternative is about forty lines of shell. The AWS-published
+action is first-party to AWS but not to GitHub, and it sits precisely
+in the credential path, so it gets no exemption.
+
+**Cost accepted:** more bash to own. Partly offset by the bash being
+more legible than an action's inputs — what it does is visible in the
+repo rather than behind a mutable version tag — and by pinning the
+Flutter version explicitly, which stops builds changing underfoot.

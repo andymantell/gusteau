@@ -18,6 +18,90 @@ Solved by: OIDC-authenticated deploys (no stored credentials
 anywhere), and CI-built signed APKs published as GitHub Releases,
 downloadable and sideloadable directly from the phone's browser.
 
+## Supply-chain policy: first-party actions only
+
+**Rule: only actions from the `actions/*` organisation (GitHub's own).
+Anything else is hand-rolled bash.**
+
+The reasoning is the usual supply-chain one, and it applies unusually
+sharply here. A third-party action runs arbitrary code on the runner
+with access to whatever secrets that step can see — including, in the
+deploy workflow, the OIDC token that is the *entire* basis of access
+to the AWS account. A compromised action, or a compromised maintainer
+account behind one, is a direct route to the account. There's no
+mitigating control that makes that acceptable when the alternative is
+a few lines of shell.
+
+**Also pin to full commit SHAs, not tags**, even for `actions/*`. Tags
+are mutable: `@v4` can be repointed at new code. SHA-pinning costs
+nothing and makes the pipeline reproducible, with Dependabot able to
+raise PRs to move the pins.
+
+### What this rules out, and what replaces it
+
+| Was going to use | Replaced by |
+|---|---|
+| `aws-actions/configure-aws-credentials` | Hand-rolled OIDC exchange (below) |
+| `subosito/flutter-action` | Download + cache the Flutter SDK in bash |
+| `softprops/action-gh-release` | `gh release create` — the GitHub CLI is preinstalled on runners |
+
+Still fine, being first-party: `actions/checkout`,
+`actions/setup-python`, `actions/setup-java`, `actions/setup-node`,
+`actions/cache`, `actions/upload-artifact`.
+
+The Android SDK is preinstalled on GitHub's `ubuntu-latest` runners,
+so nothing extra is needed for it.
+
+### The OIDC exchange, hand-rolled
+
+This is the one worth writing out, because it's the step people assume
+needs an action. It doesn't — it's a token request and an STS call:
+
+```bash
+# Requires: permissions: id-token: write
+TOKEN=$(curl -sSf \
+  -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+  | jq -r '.value')
+
+CREDS=$(aws sts assume-role-with-web-identity \
+  --role-arn "$AWS_DEPLOY_ROLE_ARN" \
+  --role-session-name "gha-${GITHUB_RUN_ID}" \
+  --web-identity-token "$TOKEN" \
+  --duration-seconds 3600 \
+  --query Credentials --output json)
+
+# Mask before export so nothing leaks into public build logs
+for k in AccessKeyId SecretAccessKey SessionToken; do
+  v=$(jq -r ".$k" <<<"$CREDS"); echo "::add-mask::$v"
+done
+{
+  echo "AWS_ACCESS_KEY_ID=$(jq -r .AccessKeyId <<<"$CREDS")"
+  echo "AWS_SECRET_ACCESS_KEY=$(jq -r .SecretAccessKey <<<"$CREDS")"
+  echo "AWS_SESSION_TOKEN=$(jq -r .SessionToken <<<"$CREDS")"
+} >> "$GITHUB_ENV"
+```
+
+`aws`, `jq` and `curl` are all preinstalled on GitHub runners. The
+`::add-mask::` calls matter here specifically because this is a
+**public repository** — build logs are world-readable.
+
+### Flutter SDK, hand-rolled
+
+Download the pinned SDK tarball to a cached directory, verify its
+checksum, extract, and prepend to `PATH`. Cache keyed on the pinned
+version via `actions/cache`, so it's a download once and a restore
+thereafter. Pinning the version explicitly is a benefit rather than a
+cost — builds stop changing underfoot.
+
+### The trade being accepted
+
+More bash to own and maintain: roughly 40 lines across the workflows,
+mostly the two blocks above. That's the price of no third-party code
+in the credential path, and it's a good trade at this size. The bash
+is also more legible than an action's inputs, since what it does is
+visible in the repo rather than behind a version tag.
+
 ## Repo layout this assumes
 
 ```
@@ -41,7 +125,8 @@ permissions:
   id-token: write     # required to request the OIDC token
   contents: read
 ```
-then `aws-actions/configure-aws-credentials@v4` with `role-to-assume`.
+then the hand-rolled exchange above — no third-party action sits
+between the OIDC token and the AWS account.
 
 ### The IAM role should NOT have AdministratorAccess
 
@@ -106,7 +191,8 @@ Fast feedback, no credentials needed, so it runs safely on any PR.
   real check — it proves the CDK app compiles and produces a valid
   template without touching AWS.
 - **app job:** `flutter analyze`, `flutter test`, and a **debug** APK
-  build to prove compilation. Not published.
+  build to prove compilation. Not published. Flutter SDK installed by
+  the cached bash step, not a third-party action.
 - Runs both in parallel; caches pip, pub and Gradle.
 - No `id-token` permission, no secrets — deliberately, so a PR can
   never reach AWS.
@@ -124,11 +210,13 @@ Fast feedback, no credentials needed, so it runs safely on any PR.
 ### `release.yml` — signed Android APK
 
 - **Triggers:** pushing a `v*` tag, plus `workflow_dispatch`.
-- Sets up JDK 17 (temurin) and Flutter, restores the signing keystore
-  from secrets, builds `flutter build apk --release`.
-- **Publishes the APK as a GitHub Release asset.** This is the whole
-  point: the release page is a URL the phone's browser can open, and
-  the APK installs straight from Downloads.
+- Sets up JDK 17 via `actions/setup-java`, Flutter via the cached bash
+  step, restores the signing keystore from secrets, builds
+  `flutter build apk --release`.
+- **Publishes the APK as a GitHub Release asset** with
+  `gh release create` (the GitHub CLI is preinstalled). This is the
+  whole point: the release page is a URL the phone's browser can open,
+  and the APK installs straight from Downloads.
 - Build APK, not App Bundle — `.aab` is for Play Store distribution
   and can't be sideloaded.
 - Version name/code derived from the tag so installs upgrade cleanly

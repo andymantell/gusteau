@@ -17,6 +17,10 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
 - **One-time manual step (the only one):** deploy
   `infra/github-oidc.yaml` via the AWS console to create the OIDC
   provider and deploy role. Everything after this is automated.
+- **Supply-chain rule from the outset:** only `actions/*` (GitHub's
+  own) actions, SHA-pinned; anything else hand-rolled in bash —
+  including the OIDC exchange, so no third-party code sits between the
+  token and the AWS account (see `ci-cd.md`).
 - **`ci.yml`** — lint, test and `cdk synth` on every PR; no secrets,
   no AWS access.
 - **`deploy.yml`** — OIDC-authenticated `cdk diff` + `cdk deploy`, no
