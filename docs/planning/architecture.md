@@ -64,43 +64,87 @@ though CDK will still support it cheaply).
 
 ## LLM strategy — "specialist cookery LLM"
 
-Bedrock does not offer an off-the-shelf "cookery" foundation model,
-so "specialist" needs to be built rather than picked off a shelf.
-Realistic options, roughly in order of effort:
+Bedrock does not offer an off-the-shelf "cookery" foundation model, so
+"specialist" needs to be built rather than picked off a shelf. During
+planning we looked specifically at Hugging Face for existing
+cookery-specialised models, per the owner's request. What's actually
+out there:
 
-1. **Prompt engineering + retrieval (RAG)** on a strong general model
-   (e.g. a Claude model on Bedrock): ship a system prompt encoding
-   cookery expertise and the owner's standing preferences/dismissal
-   reasons, and ground suggestions in a curated recipe corpus /
-   nutrition data via retrieval. Fast to build, easy to iterate, no
-   training pipeline to maintain.
-2. **Fine-tuning** a Bedrock-supported base model on a recipe dataset.
-   Higher effort, ongoing retraining cost, and for a single-user tool
-   the marginal quality gain over (1) + good retrieval is likely small.
-3. A hybrid: start with (1), revisit (2) only if evaluation shows
-   prompt+RAG genuinely plateaus.
+- Small, narrowly fine-tuned recipe generators — e.g. a BLOOM-560M
+  fine-tune aimed at diabetic-friendly recipes, a TinyLlama fine-tune
+  on ~10K Indian recipes ("CookGPT"), and encoder-only models like
+  RecipeBERT (trained on Recipe1M+, good for embeddings/retrieval, not
+  generation).
+- All of these are **text-only** and trained on a narrow slice of
+  cuisine or use case. None handle the photo-to-recipe requirement
+  (recipe card or plate of food → recipe), which needs a genuinely
+  multimodal model. None are an obvious drop-in replacement for a
+  frontier general model on quality of open-ended recipe reasoning
+  (substitutions, working from a fuzzy owner preference like "too
+  spicy", inferring a dish from a photo).
 
-Default recommendation is to start with (1) and treat "specialist" as
-"general-purpose model + cookery-specific prompting/grounding/tools,"
-not a bespoke model. Flagged as an open question to confirm.
+Given that, the plan is:
+
+1. **Primary path — prompt engineering + retrieval (RAG) on a strong
+   general multimodal model** (e.g. a Claude model on Bedrock): a
+   system prompt encoding cookery expertise and the household's
+   standing preferences/dismissal reasons, grounded in a curated
+   recipe corpus via retrieval, using the same model for the
+   photo-to-recipe feature since it needs vision anyway. Fast to
+   build, easy to iterate, no training pipeline, one model to run.
+2. **Iteration-1 spike — evaluate a Hugging Face cookery model as a
+   supplement**, imported via **Bedrock Custom Model Import** (which
+   supports a specific set of open architectures — broadly
+   Llama/Mistral/Mixtral-family and a few others; confirm the chosen
+   model's architecture is supported before committing). Run it
+   side-by-side on the same suggestion prompts as (1) and only keep it
+   in the design — e.g. as a specialised sub-step for a narrow task
+   like ingredient substitution — if it demonstrably beats prompt+RAG
+   on a general model. Time-boxed; not a hard dependency for iteration
+   1 to ship.
+3. **Fine-tuning our own model** stays as a later option, not pursued
+   now — for a single-household tool the effort of maintaining a
+   training pipeline is hard to justify unless (1) and (2) both prove
+   insufficient.
 
 ## Data model (sketch)
 
+Modelled as multi-household/multi-user from the start (see
+`decisions.md`), even though only one household is expected to exist
+in practice. Every entity below that isn't global hangs off a
+`Household`, not off an implicit single owner.
+
+- `Household` — id, name, members.
+- `User` — id, household id, display name, auth identity (Cognito
+  sub), own preference profile.
 - `Recipe` — id, title, ingredients[with qty+unit], method, source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /
-  manual), tags (cuisine, time, difficulty).
-- `WeeklyPlan` — week id, list of `Suggestion` slots (N per week).
+  manual), tags (cuisine, time, difficulty). Recipes themselves are
+  not household-scoped — they're shared, reusable content.
+- `WeeklyPlan` — household id, week id, list of `Suggestion` slots (N
+  per week). **Working assumption:** one shared plan per household,
+  not one per member — flagged as an open question in
+  `risks-and-open-questions.md` §4 to confirm.
 - `Suggestion` — slot id, current `Recipe`, refresh history, status
   (pending / accepted / dismissed-temporary / dismissed-permanent).
-- `Dismissal` — recipe id, type (temporary/permanent), reason (free
-  text + optional structured category), timestamp — permanent ones
-  feed back into future suggestion prompts.
-- `ShoppingList` — week id, merged ingredient lines (name, quantity,
-  unit, source recipes), purchasable-quantity rounding applied.
-- `BasketQuote` — retailer, shopping list id, line-item matches, total
-  price, availability/substitution notes, fetched-at timestamp.
-- `Order` — retailer, basket snapshot, delivery slot, status
-  (quoted / slot-reserved / placed / failed), audit trail.
+- `Dismissal` — household id, user id (who dismissed it), recipe id,
+  type (temporary/permanent), scope (this member only / whole
+  household — see open question), reason (free text + optional
+  structured category), timestamp. Permanent dismissals feed back into
+  future suggestion prompts for whichever scope applies.
+- `ShoppingList` — household id, week id, merged ingredient lines
+  (name, quantity, unit, source recipes), purchasable-quantity
+  rounding applied.
+- `BasketQuote` — household id, retailer, shopping list id, line-item
+  matches, total price, availability/substitution notes, fetched-at
+  timestamp.
+- `Order` — household id, retailer, basket snapshot, delivery slot,
+  status (quoted / slot-reserved / placed / failed), audit trail.
+
+Suggestion generation reads every household member's active
+preferences and dismissal history and pools them into the prompt/RAG
+context for that household's plan, rather than personalising per
+member — consistent with the single-shared-plan assumption above.
 
 ## Security posture (headline, detail in open-questions doc)
 

@@ -1,62 +1,49 @@
 # Risks and open questions
 
 These need owner decisions before the plan can be called "ready to
-implement." Biggest one first.
+implement." Resolved items have moved to `decisions.md` and are kept
+here only as a pointer, with any follow-on questions they raised.
+Biggest remaining one first.
 
 ## 1. Supermarket ordering automation — how far do we actually automate?
 
-UK grocers (Tesco, Sainsbury's, Asda, Morrisons, Ocado, Waitrose) do
-not publish a public API for building a basket and checking out as a
-consumer. That leaves three realistic approaches, with very different
-risk profiles:
-
-- **A. Fully automated (headless browser / private API calls).**
-  Gusteau logs into the retailer as the owner and drives the whole
-  flow — add to basket, pick slot, pay — without a human in the loop.
-  Most convenient, but: almost certainly against the retailer's terms
-  of service for automated access, fragile (breaks whenever the
-  retailer changes their site/adds bot detection), and the highest
-  security blast radius since the backend needs standing access to
-  the retailer session/credentials.
-- **B. Assisted handoff.** Gusteau builds the compared/chosen basket
-  and shopping list, then hands off to the retailer's own app/site
-  (deep link, or just a checklist) for the owner to do the final
-  add-to-basket-and-pay tap themselves. Safer (no ToS/bot-detection
-  problem, no stored retailer credentials, no payment automation to
-  secure), but "complete the order" becomes "get it 95% of the way
-  there" rather than fully hands-off.
-- **C. Phased.** Start with B for every retailer (ships fast, low
-  risk), then selectively move specific retailers to A later if/where
-  it's viable and the owner is comfortable with the risk (e.g. only
-  for a retailer with a more tolerant stance, or if a legitimate
-  partner API turns up).
-
-**Decision needed:** which posture to plan around. This affects almost
-everything downstream — the ordering service's design, whether Fargate
-(long-lived browser sessions) is needed at all, and the security model.
+**Resolved 2026-08-12 — see `decisions.md`.** Phased, assisted-first:
+Gusteau builds and compares the basket, then hands off to the
+retailer's own app/site for the owner to complete payment, for every
+retailer initially. Fully automated checkout for a given retailer is a
+later, separate decision per retailer — not assumed here.
 
 ## 2. Which supermarkets to target first
 
-Affects how many "retailer adapters" iteration 5/6 need to build, and
-which ones are even feasible under whichever posture is chosen above.
-Likely candidates: Tesco, Sainsbury's, Asda, Ocado, Morrisons. Some
-have historically been more or less tolerant of automated access than
-others — worth checking per-retailer once the posture (question 1) is
-decided.
+**Resolved 2026-08-12 — see `decisions.md`.** Tesco, Sainsbury's,
+Asda, Waitrose, plus a spike (iteration 5) to check whether ordering
+via Amazon.co.uk's grocery partnerships (Morrisons/Co-op/Iceland, plus
+Amazon's own grocery range) is a viable fifth channel.
 
-## 3. LLM approach — prompt+RAG vs. fine-tuning
+## 3. LLM approach — prompt+RAG vs. fine-tuning vs. off-the-shelf
 
-Covered in `architecture.md`. Recommendation is prompt engineering +
-retrieval on a general Bedrock model to start. Needs a confirm/veto.
+**Resolved 2026-08-12 — see `decisions.md`.** Prompt engineering + RAG
+on a general multimodal Bedrock model as the primary path, with a
+time-boxed iteration-1 spike evaluating an off-the-shelf Hugging Face
+cookery model via Bedrock Custom Model Import as a possible
+supplement — kept only if it demonstrably wins.
 
 ## 4. Household scope
 
-Is this genuinely single-user, or does "my personal use" include
-catering for a partner/household with their own likes, dislikes, and
-dismissal reasons? Affects the data model (does a `Dismissal` belong
-to a user, or is there only ever one implicit user) and the suggestion
-prompt (whose preferences count). Cheap to build in a second profile
-now vs. bolt it on later.
+**Resolved 2026-08-12 — see `decisions.md`.** Model `Household` and
+`User` as first-class from the start, even though it'll likely only
+ever run for a household of one.
+
+**Follow-on question this raises, still open:** is a `WeeklyPlan` a
+single shared plan for the whole household (one set of N meals
+everyone eats, like a Gousto box), or does each member get their own
+plan? The brief as written ("suggest N recipes each week... I choose")
+reads like a single shared household plan with preferences pooled
+from all members, which is the working assumption for the data model
+in `architecture.md` — flagging here so it's an explicit assumption
+to confirm, not a silent one. Also open: for a *permanent* dismissal,
+does it apply household-wide (nobody gets that recipe again) or only
+to the member who dismissed it?
 
 ## 5. Payment mechanics, concretely
 

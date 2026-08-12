@@ -47,11 +47,26 @@ open questions in `risks-and-open-questions.md` are resolved.
 ## Ordering
 
 - Compare the **total basket price** for the week's shopping list
-  across **several supermarkets**.
+  across **several supermarkets** — initially Tesco, Sainsbury's,
+  Asda, Waitrose, and (pending a feasibility spike) Amazon.co.uk's
+  grocery partnerships. See `decisions.md`.
 - Owner **chooses** which supermarket to order from (not fully
   automatic choice).
-- **Reserve a delivery slot.**
-- **Complete the order** end-to-end.
+- **Reserve a delivery slot and complete the order.** Phased: starts
+  as an assisted handoff (Gusteau prepares the basket, owner does the
+  final pay/confirm step on the retailer's own app/site), with fully
+  automated checkout for specific retailers as a possible later
+  iteration, not assumed up front. See `decisions.md` and
+  `risks-and-open-questions.md` §1.
+
+## Household / multi-user
+
+- Data model and auth are built as multi-household/multi-user from
+  the start, not hard-coded to a single owner — see `decisions.md`.
+  In practice this will likely only ever run for one household.
+- No public sign-up flow; this stays a personal tool.
+- Open: whether a weekly plan and permanent dismissals are shared
+  household-wide or per-member — see `risks-and-open-questions.md` §4.
 
 ## Security
 
