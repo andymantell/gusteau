@@ -67,6 +67,18 @@ though CDK will still support it cheaply).
 Two genuinely different LLM use cases live in this app, and they don't
 need the same treatment. Splitting them out:
 
+### Shared house style: how `method` gets written
+
+Regardless of which capability produces a `Recipe` (suggestion
+generation or photo-to-recipe below), the `method` field is written
+for a competent home cook, not a beginner — no narrating basic
+technique, no padding. It should include whatever actually varies
+dish-to-dish and would trip up someone recreating it blind: specific
+temperatures/times, ordering that matters, and any step that's easy to
+get wrong for *this* dish. This is a fixed instruction in both
+prompts, not something either capability decides independently — see
+`requirements.md` for the full spec.
+
 ### Recipe suggestion generation — this is where "specialist" matters
 
 This is the part that benefits from cookery-specific framing: it needs
@@ -180,9 +192,9 @@ deliberately simple:
 
 - A single call to the same general multimodal Bedrock model used for
   suggestions (no separate model to run, but a distinct, much simpler
-  prompt — just "extract/infer a structured recipe from this image",
-  no cookery-specialist system prompt, no preference grounding, no
-  RAG).
+  prompt — "extract/infer a structured recipe from this image", plus
+  the shared `method` house style above; no cookery-specialist system
+  prompt, no preference grounding, no RAG).
 - Out of scope for the Hugging Face specialist-model spike above —
   none of those candidates are multimodal anyway, and even if one
   were, this task doesn't need cookery specialisation to begin with.

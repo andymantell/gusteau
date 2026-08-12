@@ -39,6 +39,24 @@ open questions in `risks-and-open-questions.md` are resolved.
   suggesting blind. See `decisions.md` for how this fits the existing
   refresh mechanic rather than being a separate planning mode.
 
+## Recipe content
+
+- Every `Recipe` — LLM-suggested, photo-derived, or manual — includes
+  **method steps sufficient to actually recreate the dish**, not just
+  a title and ingredient list.
+- Written for **someone who already knows how to cook**: no explaining
+  basic technique ("dice the onion", "bring to the boil" needs no
+  further comment), no padding, no hand-holding tone. What it must
+  include is whatever actually varies dish-to-dish and would trip up
+  a competent cook guessing blind — specific temperatures and times,
+  ordering that matters, and any technique or step that's easy to
+  get wrong or skip for *this* dish (e.g. resting the meat, reducing a
+  sauce to a specific consistency, when to deglaze). Terse and
+  information-dense over narrated and long.
+- Applies uniformly regardless of source, so this is a shared
+  "house style" instruction in both the suggestion-generation prompt
+  and the photo-to-recipe extraction prompt — see `architecture.md`.
+
 ## Recipe capture from a photo
 
 - Photograph a **recipe card** (or any written recipe) → LLM extracts
