@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ (API 31+) Auto Backup rules.
+
+  Deliberately include-only, and deliberately including exactly one
+  file: the drift database, and nothing else. Once any <include> is
+  present, everything not matched is excluded by default — which is
+  exactly what's wanted here, rather than trying to enumerate every
+  file that shouldn't be backed up.
+
+  What that quietly-correct default keeps out, without a separate
+  <exclude> for any of it:
+    - gusteau.sqlite-wal / gusteau.sqlite-shm — the SQLite WAL
+      sidecars. Backing these up separately from the main file (or not
+      at all) risks exactly the "stale or corrupt restore, no error at
+      backup time" failure described in
+      docs/planning/architecture.md, "Backup and durability" — hence
+      GusteauBackupAgent forcing a WAL checkpoint before this snapshot
+      is taken, so the main file alone is self-contained by the time
+      Android gets to it.
+    - gusteau.sqlite.pre-migration-*.bak — the pre-migration safety
+      snapshots (see lib/data/pre_migration_snapshot.dart). Purely a
+      local safety net; not meant to travel to a new device.
+    - The flutter_secure_storage shared_prefs file(s), holding the
+      proxy API key. These are encrypted with an Android
+      Keystore-backed key that is hardware-bound and does not survive
+      to a new device — restoring the encrypted blob would just be
+      undecryptable garbage there. The app already handles "no API key
+      yet" as an ordinary state (see lib/screens/connection_screen.dart,
+      ProxyHealthNotConfigured), so the owner re-entering the key once
+      after a restore is the correct behaviour, not a bug to work
+      around.
+
+  domain="file" because the database lives in
+  getApplicationDocumentsDirectory(), which on Android is
+  context.filesDir — see lib/data/database.dart. Confirmed for real by
+  the install-and-restore test this iteration also requires (see
+  docs/planning/iterations.md, iteration 0).
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="gusteau.sqlite"/>
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="gusteau.sqlite"/>
+    </device-transfer>
+</data-extraction-rules>

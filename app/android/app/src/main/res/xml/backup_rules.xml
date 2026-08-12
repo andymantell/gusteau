@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Legacy Auto Backup rules for API 23-30 (minSdk is 24 — see
+  android/app/build.gradle.kts). Android 12+ (API 31+) devices use
+  data_extraction_rules.xml instead and ignore this file; both are
+  referenced from AndroidManifest.xml for coverage across the app's
+  supported range.
+
+  Same reasoning as data_extraction_rules.xml: include-only, one file,
+  see that file's comments for the full explanation of what this
+  deliberately leaves out and why.
+-->
+<full-backup-content>
+    <include domain="file" path="gusteau.sqlite"/>
+</full-backup-content>

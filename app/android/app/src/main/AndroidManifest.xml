@@ -5,7 +5,15 @@
     <application
         android:label="gusteau"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:backupAgent=".GusteauBackupAgent"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- android:allowBackup is Android's default (true) — stated
+             explicitly since GusteauBackupAgent and the rules above only
+             matter if it's on. See docs/planning/architecture.md,
+             "Backup and durability". -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
