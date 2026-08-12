@@ -52,6 +52,11 @@ scope for MVP versus later is expressed by the build order in
 - Any good recipe can be **saved as a favourite**, regardless of where
   it came from (LLM suggestion, photo-to-recipe, or manual entry).
   Favourites live in the on-device database.
+- **Repeat cooldown:** a recipe you've cooked recently isn't offered
+  again as an LLM suggestion for a configurable number of weeks
+  (default around 6). Picking a favourite yourself is exempt — the
+  cooldown only governs what the app offers unprompted, never what you
+  choose.
 - When planning a week, the owner can **fill some of the N slots from
   favourites** directly instead of an LLM suggestion, and have the LLM
   **fill the remaining slots** — aware of which favourites have
@@ -108,7 +113,12 @@ scope for MVP versus later is expressed by the build order in
   cook: "500g beef mince, 12% fat", not "mince". The model knows what
   the dish wants, so making it say so up front removes most shopping
   ambiguity before it exists.
-- Both rules apply uniformly regardless of source, so they're shared
+- **Rough nutrition estimates per portion** — approximate calories and
+  macros, produced by the LLM as part of generating the recipe, shown
+  as one line on the recipe. Purely informational: no targets, no
+  weekly totals, and it never constrains what gets suggested.
+  Displayed as clearly approximate, because it is.
+- These rules apply uniformly regardless of source, so they're shared
   "house style" instructions in both the suggestion-generation prompt
   and the photo-to-recipe extraction prompt — see `architecture.md`.
 
@@ -187,6 +197,10 @@ after, once the core concept is stable. See `decisions.md`.
   `risks-and-open-questions.md` §1.
 - The checklist is kept **permanently as a fallback** — the
   integration relies on an unofficial API and will break sometimes.
+- **Show what it costs, don't police it.** Once real prices are
+  available (iteration 6), show the basket total and a per-recipe
+  cost. No budget ceiling, no warnings, and cost never influences what
+  gets suggested.
 
 ### Deferred to post-v1
 
@@ -224,16 +238,35 @@ after, once the core concept is stable. See `decisions.md`.
   manual JSON export is plaintext. Standing rules are specified in
   `architecture.md`, "Security posture."
 
-## Not yet specified (owner to flesh out over time)
+## Notifications
 
-- Nutrition tracking (macros, calories). *Dietary constraints are not
-  a separate feature — see "The personalised prompt" above; a
-  hand-added preference rule covers it.*
-- Meal history / repeats — how often the same recipe is allowed to
-  reappear.
-- Notifications (e.g. "your basket is ready to review", "slot booked").
-- What happens if a chosen delivery slot disappears mid-checkout.
-- Budget cap / spend alerts.
+- **One weekly planning nudge**, on a day and time set in settings —
+  "time to plan next week's meals". Off by default until a day is
+  chosen.
+- Nothing else: no alerts for suggestions being ready or baskets being
+  built, since those finish in seconds while you're looking at the
+  screen.
+- Scheduled locally by Android. No push service, no server, no
+  addition to the AWS footprint.
+
+## Deliberately not doing
+
+Every item that sat on the "not yet specified" list has now been
+decided, most of them by scoping them out:
+
+- **Dietary constraints** — not a separate feature; a hand-added
+  preference rule covers it (see above).
+- **Nutrition tracking** — rough per-portion estimates only, shown on
+  the recipe. No targets, no weekly totals, no influence on
+  suggestions.
+- **Budget** — show the basket total and per-recipe cost once real
+  prices exist. No ceiling, no warnings, no effect on suggestions.
+- **Notifications** — one weekly planning nudge, locally scheduled.
+  Nothing else.
+- **Lost delivery slot** — not handled by Gusteau. Slot choice and
+  payment happen on Sainsbury's own checkout, which handles this
+  better than we could. The only obligation on us is honesty: never
+  show a slot as reserved until checkout has actually completed.
 
 **Android only. iOS is out of scope** — not "later", not a
 consideration. Where a choice is cheaper or better if it need only

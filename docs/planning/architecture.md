@@ -172,7 +172,10 @@ Splitting its mechanisms by what a phone can do changes the picture:
    real running total.
 3. **Hand off in the same WebView**, dropped at the trolley page with
    everything already in it. The owner picks their slot and pays on
-   Sainsbury's own page, in a real session.
+   Sainsbury's own page, in a real session. Slot availability is
+   therefore Sainsbury's problem, not ours — Gusteau holds no slot
+   state and must never show a slot as reserved before checkout has
+   actually completed.
 
 No Playwright, no server, no stored password, no AWS involvement at
 all — and it lands on the "target" tier from iteration 5's spike
@@ -358,6 +361,12 @@ both prompts, rather than being decided independently by each:
   blind: specific temperatures/times, ordering that matters, and any
   step that's easy to get wrong for *this* dish. See `requirements.md`
   for the full spec.
+- **Rough nutrition estimates per portion** — approximate calories and
+  macros, emitted alongside the recipe. Free in practice: the model is
+  already generating the recipe, so this costs a few extra tokens and
+  no nutrition database. Informational only — it never feeds back into
+  what gets suggested, so it can be wrong without doing harm, and it's
+  labelled as an estimate wherever it appears.
 - **`ingredients` are specified precisely enough to buy**, not just
   precisely enough to cook. "500g beef mince, 12% fat" rather than
   "mince"; "chicken thighs, boneless and skinless" rather than
@@ -517,6 +526,25 @@ The same principle — **no hidden learned state** — applies to the
 other things the app quietly accumulates: `IngredientPreference` (see
 below) and `PantryStaple` both get inspectable, editable list screens
 for exactly the same reason.
+
+#### Repeat cooldown
+
+A recipe cooked within the last N weeks (configurable, default around
+6) is excluded from LLM suggestions. This is enforced **as a filter on
+the app's side, not as a prompt instruction** — the recently-cooked
+set is excluded when suggestions come back, rather than merely asked
+for in the prompt, because prompt instructions get dropped and this is
+cheap to guarantee deterministically.
+
+It applies only to unprompted suggestions. Picking a favourite is
+always allowed regardless of when it was last cooked — the cooldown
+governs what the app offers, never what the owner chooses.
+
+The purpose is guarding against the failure mode that would quietly
+kill the app's value: LLMs converge, and without a hard rule the
+suggestions drift toward the same handful of dishes over months. The
+cooldown is also why `Recipe` history is worth keeping indefinitely
+rather than pruning.
 
 #### Favourites — the positive mirror of dismissal, and filling the week
 
@@ -735,10 +763,14 @@ exists** — see "Shape: local-first". There are no `Household` or
 so everything below is implicitly "mine" (see `decisions.md`).
 
 - `Settings` — a single row: `default_portions`,
-  `default_meals_per_week`, and whatever else accumulates. Seeds each
+  `default_meals_per_week`, `repeat_cooldown_weeks`, the weekly
+  planning-nudge day/time (unset = off), and whatever else
+  accumulates. Seeds each
   new `WeeklyPlan`; edited on the settings screen.
 - `Recipe` — id, title, `serves` (the portion count these quantities
-  are written for), ingredients[with qty+unit], method, source
+  are written for), ingredients[with qty+unit], method, approximate
+  per-portion nutrition (kcal + macros, LLM-estimated, informational),
+  source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /
   manual), tags (cuisine, time, difficulty). Scaled re-expressions are
   cached as variants keyed on `(recipe_id, serves)` — see "Portions
@@ -749,7 +781,8 @@ so everything below is implicitly "mine" (see `decisions.md`).
 - `Suggestion` — slot id, current `Recipe`, `filled_via`
   (llm-suggestion / favourite-pick / photo-capture / manual-pick),
   refresh history, status (pending / accepted / dismissed-temporary /
-  dismissed-permanent).
+  dismissed-permanent). Accepted suggestions are what the repeat
+  cooldown reads to know when a recipe was last cooked.
 - `Dismissal` — recipe id, type (temporary/permanent), reason (free
   text + optional structured category), timestamp. Temporary removes
   the recipe for the current week; permanent removes it from all

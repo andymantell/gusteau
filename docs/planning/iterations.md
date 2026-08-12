@@ -76,6 +76,10 @@ deliberately after the core concept has proved itself in real use.
 - Rescaling: a favourite picked for a week whose portion count differs
   from the recipe's `serves` is re-expressed via one LLM call and
   cached as a variant, so it's free on every later reuse.
+- **Repeat cooldown** — recently cooked recipes filtered out of LLM
+  suggestions for a configurable number of weeks, enforced app-side
+  rather than by prompt instruction; favourite picks exempt (see
+  `architecture.md`).
 - Dismissal reasons (negative) and favourites (positive) both fed back
   into the suggestion prompt context; when the LLM fills remaining
   slots it's given the recipes already sitting in the other slots for
@@ -136,6 +140,8 @@ concept gets to prove itself first.
   Sainsbury's app.
 - Order state tracked in Gusteau (`Order`: prepared → handed-off →
   confirmed, plus abandoned), so history is useful from day one.
+- Weekly planning nudge — a single local scheduled notification on a
+  day/time set in settings. No push service, no AWS involvement.
 - Security pass end-to-end before this is done (see
   `risks-and-open-questions.md` §5) — no card data, no retailer
   credentials, nothing to review beyond the app itself.
@@ -162,8 +168,11 @@ worked out in `architecture.md`, "Sainsbury's integration".
   an unofficial API and will break sooner or later.
 - Thin seam at the adapter boundary so a second retailer is an
   addition, not a refactor — a seam, not a plugin framework.
+- Basket total and per-recipe cost shown, now that real prices are
+  available — informational only, no ceiling and no influence on
+  suggestions.
 - **Outcome:** the basket is genuinely filled at Sainsbury's before
-  you take over; you pick a slot and pay.
+  you take over; you pick a slot and pay, knowing what it costs.
 
 ## Post-v1 backlog
 Re-prioritise once the core loop is live and actually being used
@@ -178,6 +187,6 @@ weekly. Known candidates, roughly in the order they seem worth doing:
   specificity and product preferences").
 - **Fully automated checkout** for a specific retailer, if ever wanted
   — separately scoped, with its own security review (`decisions.md`).
-- From the "not yet specified" list in `requirements.md`: nutrition
-  tracking, meal-repeat rules, notifications, budget alerts, and
-  delivery-slot-disappears handling.
+- Nothing else outstanding — the former "not yet specified" list is
+  now empty, mostly by scoping items out (see `requirements.md`,
+  "Deliberately not doing").
