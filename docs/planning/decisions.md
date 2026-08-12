@@ -441,3 +441,42 @@ account staying accessible (the JSON export exists for that case); up
 to ~24h of recent changes may be unbacked, since Auto Backup runs
 roughly daily on charge/idle/Wi-Fi; and original photos aren't
 restored, only the recipes extracted from them.
+
+## 2026-08-12 — Sainsbury's integration: adopt the approach, not the dependency; ship it after v1
+
+**Decided:** build the Sainsbury's basket integration on the endpoints
+and auth flow documented by
+[`open-supermarkets`](https://github.com/abracadabra50/open-supermarkets)
+(MIT, Zishan Ashraf), reimplemented natively rather than depending on
+the library — and schedule it as **iteration 6, after v1 ships a
+purely textual shopping list**. Full design in `architecture.md`,
+"Sainsbury's integration"; credit the project in the repo when built.
+
+Shape: WebView login against Sainsbury's own page (owner types their
+own password, app keeps only session cookies — no stored credential),
+Dart HTTP against `groceries-api/gol-services` to resolve products and
+fill the real trolley, then hand off in the WebView at the trolley
+page for slot and payment.
+
+**Why not the library itself:** it's a Node/TypeScript CLI requiring
+Playwright and a filesystem session directory. None of that ships in a
+Flutter app, and headful Chromium in Lambda is exactly what the
+£15/month budget rules out. But splitting its mechanisms shows only
+login, slots and payment need a browser — and a Flutter app already
+has one. Android WebView replaces Playwright, which makes the whole
+thing fit local-first with no server involved.
+
+**Why after v1:** the owner's sequencing call, and the right one. The
+integration depends on an unofficial API that will break eventually;
+building the core concept against a textual list first means v1 has no
+external dependency at all, and the checklist survives as a permanent
+fallback for when the integration does break.
+
+**A correction worth recording:** the project's feature table shows
+"Checkout ✓" for Sainsbury's, but the source is explicit that it never
+completes payment — `dryRun=false` books a slot, navigates to the
+payment page, and stops. So this does **not** deliver unattended
+ordering, and adopting it does not reverse the assisted-handoff
+decision. Notably, the most capable open implementation available
+independently arrived at the same stopping point Gusteau had already
+chosen for its own reasons.

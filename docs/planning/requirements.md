@@ -161,18 +161,25 @@ scope for MVP versus later is expressed by the build order in
 
 ## Ordering
 
-**v1 is Sainsbury's only, with no price comparison** — see
-`decisions.md`. Multi-retailer comparison is a post-v1 enhancement.
+**v1 ends at a textual shopping list** — no retailer integration, no
+price comparison. Sainsbury's basket integration follows immediately
+after, once the core concept is stable. See `decisions.md`.
 
-- Turn the week's shopping list into a **Sainsbury's basket**, matched
-  to real products where retailer data allows, with a checklist floor
-  that works even if it doesn't (see `risks-and-open-questions.md`
-  §9).
-- **Reserve a delivery slot and complete the order** as an assisted
-  handoff: Gusteau prepares the basket, the owner does the final
-  pay/confirm on Sainsbury's own app/site. Fully automated checkout
-  stays a possible later step, not assumed. See `decisions.md` and
+- **v1:** a well-ordered, grouped **shopping checklist**, sequenced to
+  match how you actually shop, one-tap copy per line, used alongside
+  the Sainsbury's app.
+- **Iteration 6:** fill the **real Sainsbury's trolley** directly —
+  log in via a WebView on Sainsbury's own page (no password stored),
+  resolve each line to a real product with real prices and a running
+  total, then hand off in the WebView for slot and payment. See
+  `architecture.md`, "Sainsbury's integration".
+- **Reserve a delivery slot and complete the order** stays an assisted
+  handoff throughout: Gusteau prepares the basket, the owner does the
+  final slot-and-pay on Sainsbury's own page. Fully automated checkout
+  remains a possible later step, not assumed. See `decisions.md` and
   `risks-and-open-questions.md` §1.
+- The checklist is kept **permanently as a fallback** — the
+  integration relies on an unofficial API and will break sometimes.
 
 ### Deferred to post-v1
 

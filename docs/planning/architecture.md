@@ -110,6 +110,87 @@ The app is the whole product; everything below runs on the handset.
   this is the primary protection for it, not a secondary nicety — see
   "Security posture".
 
+## Sainsbury's integration
+
+[`open-supermarkets`](https://github.com/abracadabra50/open-supermarkets)
+(MIT, Zishan Ashraf) is a Node/TypeScript CLI covering nine grocery
+providers, Sainsbury's among them. We read the source during planning
+rather than trusting the feature table, and the findings shape the
+integration design.
+
+### What it actually does for Sainsbury's
+
+| Capability | Mechanism |
+|---|---|
+| Login | **Playwright** against the OAuth login page → session cookies |
+| Search, product lookup, favourites | **Plain HTTP** to `groceries-api/gol-services` |
+| Basket add / update / remove / clear | **Plain HTTP** to the same API |
+| Delivery slots (list + book) | **Playwright** |
+| "Checkout" | **Playwright**, headful — and it *stops at the payment page* |
+
+**Correcting the obvious assumption: it does not complete a purchase.**
+The README's feature table shows "Checkout ✓", but the code is explicit
+that it never pays: `dryRun=false` books a slot, navigates to the
+payment page, and stops, leaving the human to pay. It also deliberately
+runs the browser headful "for transparency".
+
+That is worth dwelling on, because it means adopting this **does not
+reverse the assisted-handoff decision** — the most capable open
+implementation available independently arrived at the same stopping
+point Gusteau already chose. It doesn't get us to unattended ordering;
+it gets us a *dramatically better handoff*, with the real basket
+genuinely filled at Sainsbury's before the owner takes over.
+
+### Why we can't just use it, and what we take instead
+
+The library is a Node CLI that needs Playwright and a filesystem
+session at `~/.sainsburys/`. None of that ships inside a Flutter
+Android app, and headful Chromium in a £15/month Lambda is exactly
+what "Cost and frugality" rules out. So **the value here is the
+documented endpoints and auth flow, not the dependency** — and its MIT
+licence makes building on that knowledge straightforward. Credit it in
+the repo when we do.
+
+Splitting its mechanisms by what a phone can do changes the picture:
+
+- **Search and basket are just authenticated HTTP calls.** Trivially
+  reimplemented in Dart, on-device, no server, residential IP.
+- **Only login, slots and payment need a browser** — and a Flutter app
+  already has one. **Android WebView replaces Playwright.**
+
+### The resulting design
+
+1. **Login in a WebView.** Show the owner the real Sainsbury's login
+   page; they type their own password into Sainsbury's own form. The
+   app captures the resulting session cookies. **Gusteau never sees or
+   stores a password**, which preserves the "no retailer credentials"
+   property rather than trading it away — a better outcome than the
+   library's stored-credential relogin.
+2. **Build the basket over HTTP in Dart**, using the endpoints above:
+   resolve each shopping-list line to a real product, add it to the
+   real Sainsbury's trolley. Real names, real prices, real stock, a
+   real running total.
+3. **Hand off in the same WebView**, dropped at the trolley page with
+   everything already in it. The owner picks their slot and pays on
+   Sainsbury's own page, in a real session.
+
+No Playwright, no server, no stored password, no AWS involvement at
+all — and it lands on the "target" tier from iteration 5's spike
+rather than the checklist floor.
+
+**Known constraints, from the source:**
+
+- **Sessions expire in roughly 20 minutes.** Fine for "plan, fill
+  basket, pay" in one sitting; it means re-authenticating most times
+  the feature is used, so the WebView login has to be quick and
+  unfussy rather than an occasional setup step.
+- There's a **store number** parameter (defaulting to `0560`) that
+  presumably wants setting correctly per delivery address.
+- It's an unofficial internal API maintained by one person against a
+  site that can change without notice. Expect breakage; keep the
+  checklist floor working as a permanent fallback rather than deleting
+  it once the integration lands.
+
 ## Backup and durability
 
 **Android Auto Backup is the primary answer to device loss**, and it's
@@ -226,7 +307,9 @@ argument for the device: requests from a residential mobile IP are far
 less likely to trip bot protection than requests from AWS IP ranges.
 Against that, parsing logic on the device can only be fixed by
 shipping a build. The spike should weigh both; on-device is the
-default under this architecture unless it proves unworkable.
+default under this architecture unless it proves unworkable. See
+"Sainsbury's integration" below — a strong candidate approach has
+already been identified.
 
 ## Cost and frugality
 

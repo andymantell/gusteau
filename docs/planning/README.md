@@ -41,12 +41,14 @@ single-user local-first design, dismissals and favourites,
 £15/month Lambda-first budget, ingredient disambiguation, pantry
 staples).
 
-**v1 is Sainsbury's only, with no price comparison** — deliberately
-scoped down so the whole loop lands end-to-end on one retailer first.
-That demoted the plan's biggest risk (retailer product/price data
-access, `risks-and-open-questions.md` §9) from project-threatening to
-a feature-quality question with an acceptable fallback. Multi-retailer
-comparison is the first post-v1 enhancement.
+**v1 ends at a textual shopping list** — no price comparison, no
+retailer integration, so it depends on nothing outside our control.
+Filling the real Sainsbury's trolley is iteration 6, using an approach
+worked out from the MIT-licensed
+[`open-supermarkets`](https://github.com/abracadabra50/open-supermarkets)
+project; multi-retailer price comparison follows after that. This
+sequencing means the plan's former biggest risk (retailer data access,
+`risks-and-open-questions.md` §9) is off the critical path entirely.
 
 Nothing gets built until the owner says go.
 

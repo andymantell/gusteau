@@ -4,11 +4,10 @@ Each iteration leaves the owner with something usable on their own
 phone. The planning decisions shaping this order are in
 `decisions.md`.
 
-**v1 is single-retailer (Sainsbury's) and has no price comparison** —
-see `decisions.md`. That keeps the riskiest unknown (retailer data
-access, `risks-and-open-questions.md` §9) scoped to one retailer, with
-a genuinely acceptable fallback, rather than gating the release on
-four.
+**v1 ends at a textual shopping list** (iteration 5) — no price
+comparison and no retailer integration, so it depends on nothing
+outside our control. Sainsbury's basket integration is iteration 6,
+deliberately after the core concept has proved itself in real use.
 
 ## Iteration 0 — Foundations
 - Flutter app skeleton with the **local SQLite layer** (Drift or
@@ -127,35 +126,44 @@ All on-device — this iteration adds no AWS resources.
   lists; the app stops asking about mince after the first time, and
   stops trying to sell you olive oil you already have.
 
-## Iteration 5 — Sainsbury's handoff (completes v1)
-- **Spike first:** how much Sainsbury's product data can we get, and
-  how (`risks-and-open-questions.md` §9)? This decides which of the
-  tiers below v1 ships with. Now a one-retailer question with an
-  acceptable floor, not a project risk. The spike also settles
-  on-device vs. proxy-side fetching — on-device is the default under
-  the local-first steer, and a residential IP is likely to fare better
-  against bot protection than AWS ranges.
-- Ingredient → Sainsbury's product matching, at whichever tier the
-  spike supports:
-  - **Floor (always achievable):** a well-ordered, grouped checklist
-    of specified ingredients and quantities, with one-tap copy per
-    line, used alongside the Sainsbury's app. No retailer data needed.
-  - **Target:** each line resolved to a real Sainsbury's product with
-    pack size, price, and a running basket total.
-  - **Stretch:** per-product deep links into the Sainsbury's app.
-    Investigated, not assumed — UK grocery apps generally don't
-    support deep-linking into a pre-filled basket.
-- Keep a thin seam at the adapter boundary so a second retailer is an
-  addition rather than a refactor — a seam, not a plugin framework.
+## Iteration 5 — Textual shopping list and handoff (completes v1)
+Deliberately the simple version: **no retailer integration at all**,
+so v1 carries zero dependency on Sainsbury's internals and the core
+concept gets to prove itself first.
+
+- A well-ordered, grouped shopping checklist — ordered to match how
+  you actually shop, one-tap copy per line — used alongside the
+  Sainsbury's app.
 - Order state tracked in Gusteau (`Order`: prepared → handed-off →
-  confirmed, plus abandoned), so history stays useful without
-  automation.
+  confirmed, plus abandoned), so history is useful from day one.
 - Security pass end-to-end before this is done (see
   `risks-and-open-questions.md` §5) — no card data, no retailer
-  credentials.
-- **Outcome:** complete loop on one retailer — suggestions → week plan
-  → shopping list → Sainsbury's basket → order placed by the owner.
-  **This is v1.**
+  credentials, nothing to review beyond the app itself.
+- **Outcome:** the complete loop, on foot — suggestions → week plan →
+  shopping list → shop → order placed by you. **This is v1**, and it
+  is fully usable indefinitely if the integration below never happens.
+
+## Iteration 6 — Sainsbury's basket integration (first post-v1 target)
+Only once the base concept is stable and in real weekly use. Design is
+worked out in `architecture.md`, "Sainsbury's integration".
+
+- **Spike first** (`risks-and-open-questions.md` §9): confirm the
+  `open-supermarkets`-documented endpoints still behave, from a Dart
+  client on a residential connection.
+- WebView login against Sainsbury's own page — the owner types their
+  password into Sainsbury's form, the app keeps only the session
+  cookies. No stored password.
+- Dart HTTP client against `groceries-api/gol-services`: resolve
+  shopping-list lines to real products, fill the real trolley, show
+  real prices and a running total.
+- Hand off in the WebView at the trolley page for slot choice and
+  payment.
+- **Keep the iteration-5 checklist as a permanent fallback** — this is
+  an unofficial API and will break sooner or later.
+- Thin seam at the adapter boundary so a second retailer is an
+  addition, not a refactor — a seam, not a plugin framework.
+- **Outcome:** the basket is genuinely filled at Sainsbury's before
+  you take over; you pick a slot and pay.
 
 ## Post-v1 backlog
 Re-prioritise once the core loop is live and actually being used
@@ -164,10 +172,10 @@ weekly. Known candidates, roughly in the order they seem worth doing:
 - **Price comparison across retailers** (deferred from v1 — see
   `decisions.md`): add Tesco, Asda, Waitrose adapters plus the
   Amazon.co.uk grocery-partnership channel spike, side-by-side basket
-  totals, owner picks. Requires the §9 data-access problem solved per
-  retailer, and like-for-like matching (already designed for: see
-  `architecture.md`, "Ingredient specificity and product
-  preferences").
+  totals, owner picks. `open-supermarkets` also covers Tesco and Ocado,
+  so the same source is a head start here. Requires like-for-like
+  matching (already designed for: see `architecture.md`, "Ingredient
+  specificity and product preferences").
 - **Fully automated checkout** for a specific retailer, if ever wanted
   — separately scoped, with its own security review (`decisions.md`).
 - From the "not yet specified" list in `requirements.md`: nutrition

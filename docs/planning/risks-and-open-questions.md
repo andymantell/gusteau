@@ -117,37 +117,44 @@ headless-browser scraper strains the Lambda-only/£15-a-month
 constraints (Chromium in Lambda is heavy, and residential proxies are
 exactly the recurring cost this budget excludes).
 
-**Dropping price comparison from v1 (see `decisions.md`) shrinks this
-from a project risk to a feature-quality question**, for two reasons:
-it's now one retailer instead of four, and v1 has a floor that needs
-no retailer data at all — a well-ordered checklist used alongside the
-Sainsbury's app is genuinely useful on its own.
+**Two decisions have since removed this from the critical path
+entirely.** Dropping price comparison made it one retailer instead of
+four; moving the integration to iteration 6 means **v1 doesn't touch
+retailer data at all** — it ends at a textual checklist. So this is
+now a question about how good iteration 6 can be, not whether the
+project works.
 
-So the spike ahead of iteration 5 asks a much narrower question: how
-much Sainsbury's product data can we get, at what cost and fragility?
-In rough order of preference:
+**A concrete approach has been identified**, from reading
+[`open-supermarkets`](https://github.com/abracadabra50/open-supermarkets)
+(MIT) during planning — full analysis in `architecture.md`,
+"Sainsbury's integration". The short version: Sainsbury's search and
+basket operations are plain authenticated HTTP against
+`groceries-api/gol-services`, reimplementable in Dart on-device; only
+login, slots and payment need a browser, and Android WebView provides
+that without Playwright or a server. The owner logs in on Sainsbury's
+own page, so no password is ever stored.
 
-- An aggregator or third-party grocery data API covering Sainsbury's.
-- Sainsbury's unofficial mobile-app API (lighter than HTML scraping,
-  still unofficial).
-- Direct HTML scraping, if tolerated and cheap to run.
-- No retailer data — ship the checklist floor, with pack sizes and
-  approximate prices LLM-estimated and clearly labelled as estimates.
+The iteration-6 spike is therefore narrower again: confirm those
+endpoints still behave from a Dart client on a residential connection,
+and check the store-number handling.
 
-Each tier above the floor adds real value (stock awareness, true pack
-sizes, a running basket total), so this is worth investigating
-properly — but nothing about v1 fails if the answer is "the floor."
+**Residual risk, permanent:** this is an unofficial internal API,
+documented by one person's repo, against a site that can change
+without notice. It will break eventually. Mitigated by keeping the
+iteration-5 checklist as a permanent fallback rather than deleting it
+once the integration works — degradation should be "back to the
+checklist for a bit", not "app is useless".
 
-**Still open for post-v1 comparison work:** everything above, times
-three more retailers, where the floor is *not* acceptable — a price
-comparison built on estimated prices would be worse than none. That's
-the bar the deferred comparison feature has to clear.
+**Also noted:** the ~20-minute session expiry means re-login is a
+routine part of the flow, not a one-off setup step. Worth designing
+the WebView login to be fast rather than treating it as rare.
 
-**Local-first changes one input to this spike:** fetching
-from the device uses a residential mobile IP, which is far less likely
-to trip bot protection than AWS IP ranges — a real point in favour of
-on-device fetching. Against it, parsing logic on the device can only
-be fixed by shipping a build. The spike should evaluate both.
+**Still open for post-v1 comparison work:** the same questions times
+three more retailers, where the checklist floor is *not* an acceptable
+answer — a price comparison built on estimated prices would be worse
+than none. `open-supermarkets` covers Tesco and Ocado too, which is a
+head start, though Tesco there uses a browser session rather than
+email/password.
 
 ## 10. Device loss *(largely resolved — Android Auto Backup, with caveats to implement)*
 
