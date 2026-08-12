@@ -211,3 +211,34 @@ retailer-neutral storage requirement fell out of the same thinking:
 price comparison across retailers is actively misleading unless it
 compares the same product tier at each, which is impossible if a
 preference is stored as one retailer's SKU.
+
+## 2026-08-12 — Pantry staples: assume and disclose, don't track inventory
+
+**Decided:** a household `PantryStaple` list marks ingredients assumed
+to be in the cupboard and excludes them from the weekly basket, with:
+a quantity threshold per staple so small usages are skipped but bulk
+ones ordered ("2 tbsp olive oil" no, "500ml" yes); excluded items
+disclosed in a collapsed "assumed you already have these" section at
+basket review, each one tap from being added back; a one-tap "running
+low" the owner can hit any time, which adds the item to the next
+basket; and a soft, plainly-labelled-as-a-guess depletion nudge based
+on how many planned recipes have drawn on it since last purchase. The
+list is seeded from an LLM-generated default UK pantry at setup and
+refined by the same ask-once-remember-forever mechanic as ingredient
+preferences. Exclusion runs before retailer matching, so staples never
+skew price comparison. See `architecture.md`.
+
+**Explicitly rejected: full pantry inventory tracking** (modelling
+quantities and decrementing them as recipes consume them).
+
+**Why:** the owner asked not to be sold olive oil every week. Real
+inventory tracking is the theoretically correct answer and a
+well-known trap — it only stays accurate if every purchase made
+elsewhere, every consumption, and every item that went off is
+faithfully logged, which is precisely the kind of admin burden that
+kills home inventory apps and that this project exists to avoid. The
+chosen design accepts that the app cannot know what's in the cupboard
+and is honest about it: it assumes, shows its assumptions, and makes
+the human's own observation ("that bottle's nearly empty") the
+cheapest possible input. That's more robust than a model that's
+precise until the week you forget to update it.

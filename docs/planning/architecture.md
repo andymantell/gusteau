@@ -346,6 +346,66 @@ stored as bare retailer product IDs; per-retailer IDs are a *cache* on
 top of the neutral spec, useful for speed and re-ordering, and
 revalidated because products get discontinued.
 
+## Pantry staples — what not to order
+
+Recipes list everything they need; a shopping list should only contain
+what you don't already have. Two tablespoons of olive oil, a pinch of
+salt, a teaspoon of cumin — ordering these weekly is waste, cost, and
+a basket the owner has to manually prune, which is exactly the chore
+the app exists to remove.
+
+**What's explicitly rejected: full pantry inventory tracking.**
+Modelling actual quantities and decrementing them as recipes consume
+them is the "correct" answer and a well-known trap — it only works if
+the owner faithfully logs every purchase made elsewhere, every
+consumption, and everything that went off. Home inventory apps die on
+this, and it degrades silently the moment you stop keeping up. Not
+worth it for a personal tool.
+
+**What's proposed instead: assume, disclose, and let the human be the
+sensor.**
+
+- A household **`PantryStaple` list** marks ingredients assumed to be
+  in the cupboard — cooking oils, vinegars, salt/pepper, dried herbs
+  and spices, flour, sugar, stock, condiments, and whatever else the
+  owner keeps in. These are excluded from the shopping list by
+  default.
+- **Quantity threshold, not just ingredient identity.** "2 tbsp olive
+  oil" is a staple usage and gets skipped; "500ml olive oil" for a
+  confit is a shop, and gets ordered. Same for butter — a knob for
+  frying is assumed, 250g for pastry is not. Each staple carries a
+  threshold above which it stops counting as one, which is most of
+  what makes this feel intelligent rather than blunt.
+- **Excluded staples are shown, not hidden.** The basket-review screen
+  carries a collapsed "assumed you already have these" section listing
+  what was skipped and why, each one tap away from being added back.
+  Hiding the exclusions would make a missing-oil week feel like a bug;
+  disclosing them makes it a glance.
+- **"Running low" is a one-tap action, available any time.** The owner
+  noticing an almost-empty bottle is a far better signal than anything
+  the app can infer, so make recording it trivial — from the staples
+  list, from the review screen, or from a recipe that used it. Flagged
+  items join the next basket automatically and clear the flag once
+  ordered.
+- **A soft depletion nudge as backstop**, not a claim of accuracy. The
+  app knows roughly how many planned recipes have drawn on a staple
+  since it was last bought, and can prompt — "~30 meals since you last
+  bought olive oil, add it?" — with a plainly-a-guess framing. This
+  catches the case where the owner forgets to flag it, without
+  pretending to know what's in the cupboard.
+
+**Seeding the list without a setup chore.** The owner shouldn't have
+to type out forty staples on day one. Seed it from an LLM-generated
+sensible default UK pantry at setup, then refine it the same way
+ingredient preferences are learned (see above): the first time a
+recipe calls for something plausibly-a-staple that isn't on the list,
+that's one batched question at basket review — "keep this in
+generally, or buy it each time?" — answered once and remembered.
+
+Exclusion happens **before** retailer matching, so staples never reach
+the price comparison and can't skew it; the comparison stays
+like-for-like across retailers automatically.
+
 ## Data model (sketch)
 
 Modelled as multi-household/multi-user from the start (see
@@ -392,6 +452,13 @@ in practice. Every entity below that isn't global hangs off a
   revalidated rather than trusted indefinitely. This is what makes
   "never ask twice" work — see "Ingredient specificity and product
   preferences" above.
+- `PantryStaple` — household id, normalised ingredient key (joins to
+  `IngredientPreference` on the same key), assumed-in-stock flag,
+  quantity threshold above which a recipe's use of it counts as a
+  shop rather than a staple, typical purchase pack size,
+  running-low flag (owner-set), last-purchased date, and a count of
+  planned recipes drawing on it since then to drive the soft
+  depletion nudge. See "Pantry staples" above.
 - `BasketQuote` — household id, retailer, shopping list id, line-item
   matches, total price, availability/substitution notes, fetched-at
   timestamp.

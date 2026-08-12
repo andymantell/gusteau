@@ -92,6 +92,29 @@ scope for MVP versus later is expressed by the build order in
   sensible default, with **guessed lines visually flagged** so
   correcting one is easy but never mandatory.
 
+## Pantry staples
+
+- **Don't reorder things already in the cupboard.** Olive oil, salt,
+  spices, flour, condiments and similar are marked as household
+  staples and excluded from the weekly basket by default.
+- **Threshold-aware, not blunt:** "2 tbsp olive oil" is skipped, but a
+  recipe wanting 500ml is ordered. Same for butter, flour, and
+  anything else that's a staple in small amounts and a shop in large
+  ones.
+- **Excluded items are disclosed, not hidden** — the basket review
+  shows an "assumed you already have these" section, each item one tap
+  from being added back.
+- **One-tap "running low"** on any staple, available whenever the
+  owner notices, adds it to the next basket. The owner is a better
+  stock sensor than any estimate.
+- **Soft depletion nudge** as a backstop ("~30 meals since you last
+  bought olive oil"), framed plainly as a guess.
+- **No full inventory tracking** — deliberately rejected as too much
+  logging burden for a personal tool; see `decisions.md`.
+- Staples list is **seeded automatically** from a sensible default
+  pantry at setup and refined by the same ask-once-remember-forever
+  mechanic as ingredient preferences — no forty-item setup chore.
+
 ## Ordering
 
 - Compare the **total basket price** for the week's shopping list
@@ -136,8 +159,6 @@ scope for MVP versus later is expressed by the build order in
 
 - Nutrition tracking / dietary constraints (allergies, macros, calories).
 - Portion counts / household size per meal.
-- Handling of pantry staples already owned (don't reorder olive oil
-  every week).
 - Meal history / repeats — how often the same recipe is allowed to
   reappear.
 - Notifications (e.g. "your basket is ready to review", "slot booked").

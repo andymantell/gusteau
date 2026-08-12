@@ -79,10 +79,18 @@ block anything before it.
   standing preferences, and ask only for novel consequential choices —
   batched into the review screen (see `architecture.md`, "Ingredient
   specificity and product preferences").
-- Flutter: shopping list / basket review screen, every line resolved
-  with a default, guessed lines flagged and one-tap correctable.
+- `PantryStaple` store and staple exclusion: LLM-seeded default pantry
+  at setup, quantity thresholds so small usages are skipped but bulk
+  ones ordered, one-tap "running low", and the soft depletion nudge
+  (see `architecture.md`, "Pantry staples"). Exclusion runs before
+  retailer matching.
+- Flutter: shopping list / basket review screen — every line resolved
+  with a default, guessed lines flagged and one-tap correctable, plus
+  a collapsed "assumed you already have these" section for skipped
+  staples.
 - **Outcome:** one clean shopping list per week instead of per-recipe
-  lists, and the app stops asking about mince after the first time.
+  lists; the app stops asking about mince after the first time, and
+  stops trying to sell you olive oil you already have.
 
 ## Iteration 5 — Price comparison *(highest-risk iteration — gated on a spike)*
 - **Gate: the product/price data feasibility spike from
