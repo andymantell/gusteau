@@ -15,10 +15,10 @@ later, separate decision per retailer — not assumed here.
 
 ## 2. Which supermarkets to target first
 
-**Resolved 2026-08-12 — see `decisions.md`.** Tesco, Sainsbury's,
-Asda, Waitrose, plus a spike (iteration 5) to check whether ordering
-via Amazon.co.uk's grocery partnerships (Morrisons/Co-op/Iceland, plus
-Amazon's own grocery range) is a viable fifth channel.
+**Resolved 2026-08-12, then narrowed — see `decisions.md`.** Originally
+Tesco, Sainsbury's, Asda, Waitrose plus an Amazon-channel spike. **v1
+is now Sainsbury's only**, with the rest (and the price comparison
+they existed to serve) deferred to post-v1.
 
 ## 3. LLM approach — prompt+RAG vs. fine-tuning vs. off-the-shelf
 
@@ -107,36 +107,40 @@ where catalog data comes from:
   happens after merging, on the summed quantity — easy to state, worth
   testing against real weekly plans.
 
-## 9. Where does product & price data come from? *(open — biggest remaining risk)*
+## 9. Sainsbury's product data access *(open — but no longer project-threatening)*
 
-Surfaced during plan review 2026-08-12. The assisted-handoff decision
-(§1) resolved the ToS/fragility problem for *checkout* — but iteration
-5's price comparison still needs **read access to four retailers'
-product catalogs and prices**, and none of Tesco, Sainsbury's, Asda,
-or Waitrose offers a public consumer API for that. Read-only scraping
-carries much of the same ToS/bot-detection exposure the ordering
-decision deliberately avoided, just at lower stakes; UK grocer sites
-are known to run aggressive bot protection; and a headless-browser
-scraper strains the Lambda-only/£15-month constraints (Chromium in
-Lambda is possible but heavy, and residential proxies — the usual
-workaround for bot detection — are exactly the kind of recurring cost
-this budget excludes).
+Surfaced during plan review 2026-08-12, when this was the plan's
+biggest risk: price comparison needed read access to four retailers'
+catalogs and prices, and none of the UK grocers offers a public
+consumer API. Read-only scraping carries much of the ToS and
+bot-detection exposure the assisted-handoff decision deliberately
+avoided; UK grocer sites run aggressive bot protection; and a
+headless-browser scraper strains the Lambda-only/£15-a-month
+constraints (Chromium in Lambda is heavy, and residential proxies are
+exactly the recurring cost this budget excludes).
 
-Options to evaluate in a **feasibility spike that should happen before
-iteration 5 is committed to, not during it**:
+**Dropping price comparison from v1 (see `decisions.md`) shrinks this
+from a project risk to a feature-quality question**, for two reasons:
+it's now one retailer instead of four, and v1 has a floor that needs
+no retailer data at all — a well-ordered checklist used alongside the
+Sainsbury's app is genuinely useful on its own.
 
-- Third-party grocery price-comparison APIs/aggregators (paid or free
-  tiers) that already solve retailer data access.
-- Unofficial retailer mobile-app APIs (lighter than HTML scraping,
+So the spike ahead of iteration 5 asks a much narrower question: how
+much Sainsbury's product data can we get, at what cost and fragility?
+In rough order of preference:
+
+- An aggregator or third-party grocery data API covering Sainsbury's.
+- Sainsbury's unofficial mobile-app API (lighter than HTML scraping,
   still unofficial).
-- Direct HTML scraping where a retailer tolerates it.
-- Amazon-channel pricing (§2 spike) as a partially-API-shaped path.
-- Honest fallbacks if per-retailer access fails: fewer retailers in
-  the comparison, cached/periodic rather than live prices, or
-  LLM-estimated typical prices clearly labelled as estimates.
+- Direct HTML scraping, if tolerated and cheap to run.
+- No retailer data — ship the checklist floor, with pack sizes and
+  approximate prices LLM-estimated and clearly labelled as estimates.
 
-Until this spike is done, **iteration 5 is the highest-risk part of
-the plan** and should be assumed to potentially land in a reduced form
-(fewer retailers, or approximate prices). Iterations 0–4 and 6 do not
-depend on it: the weekly-plan/shopping-list core is fully usable with
-a handoff checklist even if price comparison ends up degraded.
+Each tier above the floor adds real value (stock awareness, true pack
+sizes, a running basket total), so this is worth investigating
+properly — but nothing about v1 fails if the answer is "the floor."
+
+**Still open for post-v1 comparison work:** everything above, times
+three more retailers, where the floor is *not* acceptable — a price
+comparison built on estimated prices would be worse than none. That's
+the bar the deferred comparison feature has to clear.

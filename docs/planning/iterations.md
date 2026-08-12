@@ -2,10 +2,13 @@
 
 Each iteration leaves the owner with something usable on their own
 phone. The planning decisions shaping this order are in
-`decisions.md`. The one big sizing unknown left is iteration 5 —
-retailer product/price data access (`risks-and-open-questions.md` §9)
-— which has a feasibility spike scheduled ahead of it and does not
-block anything before it.
+`decisions.md`.
+
+**v1 is single-retailer (Sainsbury's) and has no price comparison** —
+see `decisions.md`. That keeps the riskiest unknown (retailer data
+access, `risks-and-open-questions.md` §9) scoped to one retailer, with
+a genuinely acceptable fallback, rather than gating the release on
+four.
 
 ## Iteration 0 — Foundations
 - CDK app skeleton (Python), bootstrapped in the owner's AWS account.
@@ -92,51 +95,47 @@ block anything before it.
   lists; the app stops asking about mince after the first time, and
   stops trying to sell you olive oil you already have.
 
-## Iteration 5 — Price comparison *(highest-risk iteration — gated on a spike)*
-- **Gate: the product/price data feasibility spike from
-  `risks-and-open-questions.md` §9 runs first** (it can start any time
-  from iteration 4 onwards) — it decides per retailer whether data
-  comes from an aggregator API, an unofficial API, scraping, or not at
-  all, and therefore what this iteration actually builds.
-- Retailer adapters (read-only): match shopping list items to
-  retailer catalog/products, compute basket totals, for whichever of
-  Tesco, Sainsbury's, Asda, and Waitrose the spike shows are viable.
-  Matching resolves each line's retailer-neutral spec per retailer so
-  comparison stays like-for-like; where a retailer has no equivalent
-  tier, surface it rather than silently substituting.
-- Spike (part of the same investigation): Amazon.co.uk's grocery
-  partnerships (Morrisons/Co-op/Iceland + Amazon's own range) as a
-  fifth channel; add an adapter if it stacks up, otherwise note why
-  not and move on.
-- Flutter: side-by-side basket comparison, owner picks one. Degraded
-  modes (fewer retailers, cached or clearly-labelled estimated
-  prices) are acceptable outcomes — see §9.
-- **Outcome:** owner sees comparative pricing before committing — as
-  real as retailer data access allows.
-
-## Iteration 6 — Slot reservation and order placement (assisted)
-- Assisted handoff per the phased posture decided in
-  `decisions.md`: Gusteau prepares the chosen retailer's basket
-  contents and hands off for the owner to reserve the slot and pay
-  themselves on the retailer's own app/site. Expectation check: UK
-  retailer apps generally can't be deep-linked into a pre-filled
-  basket, so the realistic baseline is a fast, well-ordered checklist
-  (grouped to match the retailer's search, one-tap copy per item)
-  used alongside the retailer's app — with per-retailer deep-linking
-  investigated as an enhancement, not assumed.
-- Order/basket state tracked in Gusteau (`Order` status: quoted →
-  handed-off → confirmed) so history is still useful even without full
+## Iteration 5 — Sainsbury's handoff (completes v1)
+- **Spike first:** how much Sainsbury's product data can we get, and
+  how (`risks-and-open-questions.md` §9)? This decides which of the
+  tiers below v1 ships with. Now a one-retailer question with an
+  acceptable floor, not a project risk.
+- Ingredient → Sainsbury's product matching, at whichever tier the
+  spike supports:
+  - **Floor (always achievable):** a well-ordered, grouped checklist
+    of specified ingredients and quantities, with one-tap copy per
+    line, used alongside the Sainsbury's app. No retailer data needed.
+  - **Target:** each line resolved to a real Sainsbury's product with
+    pack size, price, and a running basket total.
+  - **Stretch:** per-product deep links into the Sainsbury's app.
+    Investigated, not assumed — UK grocery apps generally don't
+    support deep-linking into a pre-filled basket.
+- Keep a thin seam at the adapter boundary so a second retailer is an
+  addition rather than a refactor — a seam, not a plugin framework.
+- Order state tracked in Gusteau (`Order`: prepared → handed-off →
+  confirmed, plus abandoned), so history stays useful without
   automation.
-- Security hardening pass end-to-end (see `risks-and-open-questions.md`
-  §5) before this iteration is considered done — no card data or
-  retailer credentials touch Gusteau at this stage.
-- **Outcome:** owner can go from "here's my week" to "basket ready to
-  pay for" with one handoff step; full automation for specific
-  retailers is a later, separately-scoped iteration if pursued.
+- Security pass end-to-end before this is done (see
+  `risks-and-open-questions.md` §5) — no card data, no retailer
+  credentials.
+- **Outcome:** complete loop on one retailer — suggestions → week plan
+  → shopping list → Sainsbury's basket → order placed by the owner.
+  **This is v1.**
 
-## Iteration 7+ — Backlog
-Pull from the "not yet specified" list in `requirements.md` as it
-firms up: nutrition tracking, pantry-staple handling, meal-repeat
-rules, notifications, budget alerts, iOS, etc. Re-prioritise after
-iteration 6 based on what the owner actually wants next once the core
-loop is live.
+## Post-v1 backlog
+Re-prioritise once the core loop is live and actually being used
+weekly. Known candidates, roughly in the order they seem worth doing:
+
+- **Price comparison across retailers** (deferred from v1 — see
+  `decisions.md`): add Tesco, Asda, Waitrose adapters plus the
+  Amazon.co.uk grocery-partnership channel spike, side-by-side basket
+  totals, owner picks. Requires the §9 data-access problem solved per
+  retailer, and like-for-like matching (already designed for: see
+  `architecture.md`, "Ingredient specificity and product
+  preferences").
+- **Fully automated checkout** for a specific retailer, if ever wanted
+  — separately scoped, with its own security review (`decisions.md`).
+- From the "not yet specified" list in `requirements.md`: nutrition
+  and dietary constraints, portion counts, meal-repeat rules,
+  notifications, budget alerts, delivery-slot-disappears handling,
+  iOS.

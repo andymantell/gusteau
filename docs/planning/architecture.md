@@ -15,8 +15,11 @@ API layer (API Gateway HTTP API + Lambda)
     ├── Preferences Service        ── DynamoDB (dismissals, reasons, favourites)
     ├── Photo Recognition Service  ── Bedrock (multimodal) ── S3 (photos)
     ├── Shopping List Service      ── ingredient normalisation/merge logic
-    ├── Price Comparison Service   ── per-retailer adapters (read-only)
-    └── Ordering Service           ── basket handoff per retailer
+    └── Retailer Service           ── Sainsbury's adapter: product
+                                      matching + basket handoff
+                                      (v1 is single-retailer; the
+                                      adapter boundary is a seam for
+                                      adding more post-v1)
 ```
 
 Everything sits in the owner's own AWS account, single environment to
@@ -333,12 +336,15 @@ so correcting a guess is the same interaction as answering a question
 would have been — but the basket is usable even if the owner corrects
 nothing.
 
-**Like-for-like is a correctness requirement, not a nicety.** Price
-comparison is meaningless — actively misleading — if it silently
-compares one retailer's value mince against another's organic. So the
-resolved ingredient is stored **retailer-neutrally** ("beef mince, 12%
-fat, ~500g, standard own-brand tier") and matched into each retailer's
-catalog separately at comparison time. Where a retailer has no
+**Store preferences retailer-neutrally.** Even though v1 is
+Sainsbury's-only, the resolved ingredient is stored in
+retailer-neutral terms ("beef mince, 12% fat, ~500g, standard
+own-brand tier") and matched into a retailer's catalog at basket time.
+It costs nothing now and is a hard requirement for the deferred price
+comparison: comparing retailers is meaningless — actively misleading —
+if it silently pits one's value mince against another's organic, which
+is impossible to avoid if a preference is stored as one retailer's
+SKU. Where a retailer has no
 equivalent at the specified tier, the comparison surfaces that
 explicitly (substituted up/down, or unavailable) rather than quietly
 swapping in whatever matched. This also means preferences must not be
@@ -461,7 +467,9 @@ in practice. Every entity below that isn't global hangs off a
   depletion nudge. See "Pantry staples" above.
 - `BasketQuote` — household id, retailer, shopping list id, line-item
   matches, total price, availability/substitution notes, fetched-at
-  timestamp.
+  timestamp. v1 only ever holds one of these per shopping list
+  (Sainsbury's); the shape already supports several per list, which is
+  what post-v1 price comparison needs.
 - `Order` — household id, retailer, basket snapshot, delivery slot
   (recorded by the owner post-handoff), status (quoted → handed-off →
   confirmed, plus abandoned). If full checkout automation is ever

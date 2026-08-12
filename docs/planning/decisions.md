@@ -15,8 +15,8 @@ tradeoff.
 
 **Why:** lowest risk and fastest to ship, while still delivering most
 of the value (comparison + list-building, which is the tedious part).
-Keeps iteration 6 scoped and avoids taking on standing retailer
-credential access before it's proven necessary.
+Keeps the ordering iteration scoped and avoids taking on standing
+retailer credential access before it's proven necessary.
 
 ## 2026-08-12 — Target retailers
 
@@ -33,6 +33,10 @@ committing to it as a channel.
 use, with Amazon flagged as worth investigating rather than committed
 to, since its viability as an automatable/assistable channel hasn't
 been checked yet.
+
+*(Superseded 2026-08-12 — see "v1 is Sainsbury's only" below. This
+retailer set is now the post-v1 comparison scope; v1 ships against
+Sainsbury's alone.)*
 
 ## 2026-08-12 — LLM strategy for recipe suggestions
 
@@ -242,3 +246,29 @@ and is honest about it: it assumes, shows its assumptions, and makes
 the human's own observation ("that bottle's nearly empty") the
 cheapest possible input. That's more robust than a model that's
 precise until the week you forget to update it.
+
+## 2026-08-12 — v1 is Sainsbury's only; price comparison deferred
+
+**Decided:** cut multi-retailer price comparison from the first
+version. v1 goes end-to-end against **Sainsbury's** alone: suggestions
+→ weekly plan → shopping list → Sainsbury's basket → assisted handoff.
+Tesco, Asda, Waitrose, the Amazon.co.uk grocery channel, and the
+side-by-side comparison they exist to serve all move to the post-v1
+backlog. The retailer adapter boundary stays a thin seam so adding a
+second retailer is an addition rather than a refactor — a seam, not a
+plugin framework. Retailer-neutral preference storage stays as
+designed, since it costs nothing now and comparison depends on it
+later.
+
+**Why:** the owner scoped it this way, and it's the right call on
+risk. The plan review had just identified retailer product/price data
+access as the biggest threat to the project — four retailers, no
+public APIs, aggressive bot protection, and workarounds that clash
+with the £15/month Lambda-only budget. Cutting comparison collapses
+that from "four retailers must work or the headline feature is dead"
+to "one retailer, and there's a useful fallback if its data proves
+inaccessible" (a well-ordered checklist alongside the Sainsbury's app
+is genuinely usable). It also gets the complete loop into real weekly
+use sooner, which is the fastest way to learn what actually needs
+building next — and comparison is a clean bolt-on afterwards precisely
+because nothing else depends on it.

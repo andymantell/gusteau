@@ -117,22 +117,29 @@ scope for MVP versus later is expressed by the build order in
 
 ## Ordering
 
-- Compare the **total basket price** for the week's shopping list
-  across **several supermarkets** — initially Tesco, Sainsbury's,
-  Asda, Waitrose, and (pending a feasibility spike) Amazon.co.uk's
-  grocery partnerships. See `decisions.md`.
-- Owner **chooses** which supermarket to order from (not fully
-  automatic choice).
-- Comparison must be **like-for-like** — the same specified product
-  tier at each retailer, not one retailer's value range against
-  another's premium. Where a retailer has no equivalent, say so
-  rather than silently substituting.
-- **Reserve a delivery slot and complete the order.** Phased: starts
-  as an assisted handoff (Gusteau prepares the basket, owner does the
-  final pay/confirm step on the retailer's own app/site), with fully
-  automated checkout for specific retailers as a possible later
-  iteration, not assumed up front. See `decisions.md` and
+**v1 is Sainsbury's only, with no price comparison** — see
+`decisions.md`. Multi-retailer comparison is a post-v1 enhancement.
+
+- Turn the week's shopping list into a **Sainsbury's basket**, matched
+  to real products where retailer data allows, with a checklist floor
+  that works even if it doesn't (see `risks-and-open-questions.md`
+  §9).
+- **Reserve a delivery slot and complete the order** as an assisted
+  handoff: Gusteau prepares the basket, the owner does the final
+  pay/confirm on Sainsbury's own app/site. Fully automated checkout
+  stays a possible later step, not assumed. See `decisions.md` and
   `risks-and-open-questions.md` §1.
+
+### Deferred to post-v1
+
+- Compare **total basket price across several supermarkets** (Tesco,
+  Asda, Waitrose, plus the Amazon.co.uk grocery-partnership channel),
+  with the owner choosing which to order from.
+- Comparison must be **like-for-like** — the same product tier at each
+  retailer, not one's value range against another's premium. Where a
+  retailer has no equivalent, say so rather than silently
+  substituting. (The retailer-neutral preference storage this needs is
+  already being built in v1.)
 
 ## Household / multi-user
 
