@@ -49,12 +49,17 @@ entirely on a payment method already saved on the retailer account
 hard rule regardless of posture, so it's never revisited under
 convenience pressure later.
 
-## 6. Recipe/nutrition data source for RAG grounding
+## 6. Recipe/nutrition data source for grounding
 
-Suggestion quality depends on what the retrieval corpus is grounded
-in. Options: a licensed recipe dataset, scraping (own legal/ToS
-questions again), or leaning on the LLM's own knowledge with less
-retrieval. Needs a decision once approach to Q3 is confirmed.
+**Resolved 2026-08-12 — see `decisions.md`.** No external recipe
+corpus for MVP — the owner doesn't have one and sourcing one isn't
+worth it for a single-household tool. Suggestion generation relies on
+the model's own knowledge plus the household's own preference/
+dismissal history (which the app generates itself). The app's own
+accepted/photo-derived recipes can become a self-built, optional RAG
+source later once there's enough history. A free ingredient/nutrition
+database (e.g. Open Food Facts) remains a candidate for the
+ingredient-matching problem in §8, which is a separate concern.
 
 ## 7. Budget / AWS cost expectations
 

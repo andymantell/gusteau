@@ -36,14 +36,20 @@ been checked yet.
 
 ## 2026-08-12 — LLM strategy for recipe suggestions
 
-**Decided:** Primary path is a strong general multimodal model on
-Bedrock (e.g. Claude) with cookery-focused prompting and RAG
-grounding, per `architecture.md`. In parallel, run a small **evaluation
-spike in iteration 1** trying an off-the-shelf, cookery-specialised
-open model from Hugging Face (see `architecture.md` for candidates and
-why none is an obvious drop-in win) via Bedrock Custom Model Import,
-and only keep it in the design if it demonstrably beats prompt+RAG on
-a general model for recipe-generation quality.
+**Decided:** Primary path is a strong general model on Bedrock (e.g.
+Claude) with cookery-focused prompting, per `architecture.md`. In
+parallel, run a small **evaluation spike in iteration 1** trying an
+off-the-shelf, cookery-specialised open model from Hugging Face (see
+`architecture.md` for candidates and why none is an obvious drop-in
+win) via Bedrock Custom Model Import, and only keep it in the design
+if it demonstrably beats the general-model baseline for
+recipe-generation quality.
+
+*(Amended 2026-08-12, see the "no recipe corpus" decision below: the
+RAG-grounding half of this originally assumed a curated recipe corpus,
+which turned out not to be available and was dropped as a requirement.
+Prompt engineering + the household's own preference/dismissal history
+remains the plan.)*
 
 **Why:** the owner asked to explore off-the-shelf/Hugging Face
 options specifically. Research during planning found existing
@@ -97,3 +103,19 @@ that suggestion generation needs. Keeping it as a separate, simpler
 capability avoids over-engineering it and leaves room to move it to a
 cheaper model later if cost matters, independent of the suggestion
 engine's model choice.
+
+## 2026-08-12 — No recipe corpus for suggestion grounding
+
+**Decided:** drop the requirement for an external curated recipe
+corpus. Suggestion generation relies on the general model's own
+culinary knowledge plus the household's own preference/dismissal
+history injected per request. The household's own accepted and
+photo-derived recipes, already persisted in the data model, can become
+an optional self-built retrieval source later once there's enough
+usage history — not sourced upfront. See `architecture.md`
+("Grounding data") and `risks-and-open-questions.md` §6.
+
+**Why:** the owner doesn't have a recipe corpus, and for a
+single-household tool, sourcing/licensing one upfront isn't worth the
+effort when the model's own knowledge plus real preference data covers
+the actual requirement.

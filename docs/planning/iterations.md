@@ -21,7 +21,8 @@ meant to leave the owner with something usable on their own phone.
 
 ## Iteration 1 — Recipe suggestions (core loop)
 - Bedrock integration for recipe suggestion generation (general model,
-  prompt + RAG — see `architecture.md`).
+  cookery-focused prompting, no external corpus — see
+  `architecture.md`).
 - Time-boxed spike: evaluate a Hugging Face cookery model via Bedrock
   Custom Model Import against the same prompts; keep only if it
   demonstrably wins (see `decisions.md`). Scoped to suggestion
@@ -35,7 +36,7 @@ meant to leave the owner with something usable on their own phone.
 
 ## Iteration 2 — Preferences and dismissal memory
 - Temporary vs. permanent dismissal, reason capture UI.
-- Dismissal reasons fed back into the suggestion prompt/RAG context.
+- Dismissal reasons fed back into the suggestion prompt context.
 - **Outcome:** suggestions visibly improve/avoid known dislikes over
   time.
 
