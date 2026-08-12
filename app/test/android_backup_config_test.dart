@@ -24,26 +24,29 @@ void main() {
     androidAppDir = '${Directory.current.path}/android/app/src/main';
   });
 
-  test('data_extraction_rules.xml includes exactly the drift database file', () {
-    final xml = File(
-      '$androidAppDir/res/xml/data_extraction_rules.xml',
-    ).readAsStringSync();
-    expect(xml, contains('path="$kDatabaseFileName"'));
-    // Include-only semantics exclude the WAL sidecars and the
-    // secure-storage prefs by *not* matching them — if this file ever
-    // grows another <include> tag, that reasoning (see the comments in
-    // the XML itself) needs re-checking by hand. Matches the tag, not
-    // the word, since the explanatory comment above also says
-    // "include" several times in prose.
-    expect(
-      RegExp('<include ').allMatches(xml).length,
-      2,
-      reason: 'cloud-backup + device-transfer, one include each',
-    );
-  });
+  test(
+    'data_extraction_rules.xml includes exactly the drift database file',
+    () {
+      final xml = File('$androidAppDir/res/xml/data_extraction_rules.xml')
+          .readAsStringSync();
+      expect(xml, contains('path="$kDatabaseFileName"'));
+      // Include-only semantics exclude the WAL sidecars and the
+      // secure-storage prefs by *not* matching them — if this file ever
+      // grows another <include> tag, that reasoning (see the comments in
+      // the XML itself) needs re-checking by hand. Matches the tag, not
+      // the word, since the explanatory comment above also says
+      // "include" several times in prose.
+      expect(
+        RegExp('<include ').allMatches(xml).length,
+        2,
+        reason: 'cloud-backup + device-transfer, one include each',
+      );
+    },
+  );
 
   test('legacy backup_rules.xml includes exactly the drift database file', () {
-    final xml = File('$androidAppDir/res/xml/backup_rules.xml').readAsStringSync();
+    final xml = File('$androidAppDir/res/xml/backup_rules.xml')
+        .readAsStringSync();
     expect(xml, contains('path="$kDatabaseFileName"'));
   });
 
@@ -55,7 +58,8 @@ void main() {
   });
 
   test('AndroidManifest.xml actually wires up the backup agent and rules', () {
-    final manifest = File('$androidAppDir/AndroidManifest.xml').readAsStringSync();
+    final manifest = File('$androidAppDir/AndroidManifest.xml')
+        .readAsStringSync();
     expect(manifest, contains('android:backupAgent=".GusteauBackupAgent"'));
     expect(manifest, contains('android:fullBackupContent="@xml/backup_rules"'));
     expect(
