@@ -30,6 +30,7 @@ plan is marked ready and the owner says go — see [status](#status) below.
 | [`architecture.md`](./architecture.md) | System design: Flutter app, AWS/CDK backend, Bedrock LLM, data model |
 | [`risks-and-open-questions.md`](./risks-and-open-questions.md) | Open risks and resolved questions, especially around retailer data access and payment security |
 | [`iterations.md`](./iterations.md) | Build order, broken into iterations, each independently shippable to the owner's own phone |
+| [`ci-cd.md`](./ci-cd.md) | GitHub Actions pipeline: OIDC-authenticated CDK deploys and CI-built APKs, so everything ships without a PC |
 | [`decisions.md`](./decisions.md) | Log of decisions made during planning, once resolved (ADR-style) |
 
 ## Status
@@ -66,3 +67,5 @@ Nothing gets built until the owner says go.
   on their phone, even if later iterations replace parts of it.
 - Prefer boring, inspectable technology over cleverness, given this is
   built and operated by one person.
+- **Everything ships from a phone.** Deploys and app installs go
+  through CI, so no step in the normal workflow requires a computer.

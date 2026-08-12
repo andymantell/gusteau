@@ -523,3 +523,41 @@ cosine-compared against the recent set. The structured attributes
 (protein, method, cuisine) are recorded on `Recipe` regardless — they
 earn their place for display and filtering, and it means step two
 wouldn't start with a blind history.
+
+## 2026-08-12 — CI/CD: OIDC deploys and CI-built APKs, because there's no PC
+
+**Decided:** GitHub Actions is the primary build and deploy mechanism,
+not a convenience. Three workflows — `ci.yml` (lint/test/`cdk synth`,
+no secrets, safe on any PR), `deploy.yml` (OIDC-authenticated `cdk
+diff` + `deploy`, gated behind a `production` environment), and
+`release.yml` (signed APK published as a GitHub Release asset). **No
+AWS credentials are stored anywhere**; the workflow exchanges a
+short-lived OIDC token for a role. The IAM role grants only
+`sts:AssumeRole` on the CDK bootstrap roles, not broad permissions.
+One manual bootstrap step remains — deploying `infra/github-oidc.yaml`
+by hand via the console, since the role that lets CI deploy can't be
+deployed by CI. Full design in `ci-cd.md`.
+
+**Why:** the owner raised that they can't run AWS commands from a
+phone and are away from their PC. That's not a temporary inconvenience
+to work around — it's a standing constraint that should shape the
+workflow permanently. OIDC plus CI-built APKs means the entire loop
+(change → deploy → install) runs from a phone via the GitHub mobile
+app, forever, and as a side effect there are no long-lived credentials
+to leak.
+
+**Rejected: handing AWS credentials to this planning session** so the
+stack could be deployed immediately. The session runs in an ephemeral
+cloud container, credentials would pass through the transcript, and
+CDK deploys need permissions that are awkward to scope down. There is
+also nothing to deploy yet — iteration 0 is unwritten. Short-lived STS
+session credentials would be the least-bad option if something ever
+genuinely needs deploying before the pipeline exists.
+
+**Consequence worth recording:** the Android signing keystore becomes
+critical data. Android identifies an app by its signing certificate,
+so losing it means upgrades can't install over an existing build —
+requiring an uninstall that destroys the local database, with Auto
+Backup unable to help since restore is tied to the same signing
+identity. It therefore needs storing outside GitHub secrets too, which
+are write-only. Noted in `risks-and-open-questions.md` §10.

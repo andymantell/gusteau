@@ -10,6 +10,23 @@ outside our control. Sainsbury's basket integration is iteration 6,
 deliberately after the core concept has proved itself in real use.
 
 ## Iteration 0 — Foundations
+**The pipeline comes first.** The owner needs to develop, deploy and
+install from a phone, so CI isn't a nicety here — it's the only route
+to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
+
+- **One-time manual step (the only one):** deploy
+  `infra/github-oidc.yaml` via the AWS console to create the OIDC
+  provider and deploy role. Everything after this is automated.
+- **`ci.yml`** — lint, test and `cdk synth` on every PR; no secrets,
+  no AWS access.
+- **`deploy.yml`** — OIDC-authenticated `cdk diff` + `cdk deploy`, no
+  stored AWS credentials, gated behind a `production` environment so
+  it can be approved from the GitHub mobile app.
+- **`release.yml`** — signed release APK published as a GitHub Release
+  asset, downloadable and sideloadable straight from the phone.
+- Generate the Android signing keystore and store it in secrets —
+  **and keep a copy somewhere safe**, since losing it means never
+  being able to upgrade in place (see `ci-cd.md`).
 - Flutter app skeleton with the **local SQLite layer** (Drift or
   equivalent) and migration tooling — this is the system of record, so
   it gets set up properly on day one.
@@ -24,13 +41,12 @@ deliberately after the core concept has proved itself in real use.
   ALB, no data stores, no Cognito. See `architecture.md`.
 - App stores its API key in the Android Keystore, calls the proxy and
   gets a round-trip response back.
-- CI: lint/test for both Flutter and CDK (Python); manual-trigger
-  deploy is fine for a personal project.
 - CloudWatch billing alarm at **£15/month**, plus the proxy's own rate
   limit and spend guard (see `decisions.md`).
 - **Outcome:** an app with a real local database that can reach
   Bedrock through an authenticated proxy, on infrastructure costing
-  close to £0.
+  close to £0 — and a pipeline that can ship both halves of it from a
+  phone.
 
 ## Iteration 1 — Recipe suggestions (core loop)
 - **Step zero, before building the service:** a small manual prompt

@@ -181,6 +181,15 @@ silently:
   install-and-restore test on a clean device, repeated when the schema
   changes.
 
+**One more thing whose loss is expensive: the Android signing
+keystore.** Android identifies an app by its signing certificate, so
+losing the keystore means no upgrade can be installed over an existing
+build — it must be uninstalled first, taking the local database with
+it, and Auto Backup restore is tied to the same signing identity so it
+won't help either. The keystore therefore belongs wherever the JSON
+export is kept, not solely in GitHub secrets (which are write-only and
+can't be read back). See `ci-cd.md`.
+
 **Residual risks, accepted:**
 
 - Durability now depends on the owner's Google account remaining
