@@ -109,17 +109,26 @@ cost traps are avoided by design, not caught after the fact:
 Two genuinely different LLM use cases live in this app, and they don't
 need the same treatment. Splitting them out:
 
-### Shared house style: how `method` gets written
+### Shared house style: how recipes get written
 
 Regardless of which capability produces a `Recipe` (suggestion
-generation or photo-to-recipe below), the `method` field is written
-for a competent home cook, not a beginner — no narrating basic
-technique, no padding. It should include whatever actually varies
-dish-to-dish and would trip up someone recreating it blind: specific
-temperatures/times, ordering that matters, and any step that's easy to
-get wrong for *this* dish. This is a fixed instruction in both
-prompts, not something either capability decides independently — see
-`requirements.md` for the full spec.
+generation or photo-to-recipe below), two fixed instructions apply to
+both prompts, rather than being decided independently by each:
+
+- **`method`** is written for a competent home cook, not a beginner —
+  no narrating basic technique, no padding. It should include whatever
+  actually varies dish-to-dish and would trip up someone recreating it
+  blind: specific temperatures/times, ordering that matters, and any
+  step that's easy to get wrong for *this* dish. See `requirements.md`
+  for the full spec.
+- **`ingredients` are specified precisely enough to buy**, not just
+  precisely enough to cook. "500g beef mince, 12% fat" rather than
+  "mince"; "chicken thighs, boneless and skinless" rather than
+  "chicken". The LLM knows what a bolognese wants even when a human
+  writing the recipe wouldn't bother spelling it out, so making the
+  model be explicit at generation time removes most downstream
+  ambiguity for free. This is the cheapest place to solve it — see
+  "Ingredient specificity and product preferences" below.
 
 ### Recipe suggestion generation — this is where "specialist" matters
 
@@ -274,6 +283,69 @@ deliberately simple:
   model on Bedrock, since it isn't leaning on niche cookery reasoning
   the way suggestion generation is.
 
+## Ingredient specificity and product preferences
+
+"Mince" is the canonical example of a problem that runs through the
+whole shopping-list and price-comparison half of the app. There are
+three distinct ambiguities hiding in one word, and they need different
+answers:
+
+1. **Which ingredient?** Beef, pork, lamb, turkey, Quorn.
+2. **Which specification?** Beef mince at 5%, 12%, or 20% fat.
+3. **Which product?** Even given "500g beef mince, 12% fat", a single
+   retailer sells a value line, a standard own-brand, an organic, and
+   a premium range — at materially different prices.
+
+The design goal is **ask rarely, and never ask twice**. Concretely, an
+escalation ladder, where each rung resolves most cases so the next
+rung sees few:
+
+1. **Generate unambiguously.** The house style above requires the LLM
+   to emit buyable ingredient specs. This eliminates most of (1) and
+   much of (2) at zero interaction cost.
+2. **Infer from dish context.** Where a recipe is still vague —
+   realistically the photo-derived ones, since a photographed recipe
+   card may genuinely just say "mince" — the LLM resolves it from the
+   dish (a bolognese means beef; a moussaka means lamb) as part of
+   normalising the recipe. Inferred values are marked as inferred, not
+   presented as though the source said so.
+3. **Apply standing household preferences.** Choice of product tier is
+   a personal standing preference, not a per-recipe fact: "own-brand
+   standard range unless I say otherwise", "always 12% beef mince",
+   "never the value range for meat". Once expressed, these resolve (3)
+   and the rest of (2) silently, forever.
+4. **Ask — but only when it's novel and it matters.** A first-time
+   ingredient with a consequential fork (which meat? which fat
+   content?) is worth one question. A trivial or low-stakes one
+   (which brand of tinned tomatoes) is not — pick the default and let
+   the owner override if they care.
+5. **Record every answer as a standing preference**, so rung 3 handles
+   it next time. The question budget shrinks toward zero over the
+   first few weeks of use.
+
+**Ask at basket review, not during meal planning.** Questions are
+batched and deferred to the point where the owner is already reviewing
+the shopping list before ordering — never interrupting the enjoyable
+part (picking the week's meals) with procurement admin. The review
+screen shows every line already resolved to a specific product with a
+sensible default, and visually flags the ones the system guessed at,
+so correcting a guess is the same interaction as answering a question
+would have been — but the basket is usable even if the owner corrects
+nothing.
+
+**Like-for-like is a correctness requirement, not a nicety.** Price
+comparison is meaningless — actively misleading — if it silently
+compares one retailer's value mince against another's organic. So the
+resolved ingredient is stored **retailer-neutrally** ("beef mince, 12%
+fat, ~500g, standard own-brand tier") and matched into each retailer's
+catalog separately at comparison time. Where a retailer has no
+equivalent at the specified tier, the comparison surfaces that
+explicitly (substituted up/down, or unavailable) rather than quietly
+swapping in whatever matched. This also means preferences must not be
+stored as bare retailer product IDs; per-retailer IDs are a *cache* on
+top of the neutral spec, useful for speed and re-ordering, and
+revalidated because products get discontinued.
+
 ## Data model (sketch)
 
 Modelled as multi-household/multi-user from the start (see
@@ -309,7 +381,17 @@ in practice. Every entity below that isn't global hangs off a
   `Dismissal`.
 - `ShoppingList` — household id, week id, merged ingredient lines
   (name, quantity, unit, source recipes), purchasable-quantity
-  rounding applied.
+  rounding applied. Each line also carries how it was resolved
+  (from recipe / inferred / standing preference / owner-answered) and
+  a confidence flag, so the review screen knows what to highlight.
+- `IngredientPreference` — household id, normalised ingredient key
+  ("beef mince"), the retailer-neutral resolved spec (variant, grade/
+  fat content, preferred pack size, product tier), how it was
+  established (asked / inferred / default), and timestamps. Plus an
+  optional per-retailer product-ID cache on top of the neutral spec,
+  revalidated rather than trusted indefinitely. This is what makes
+  "never ask twice" work — see "Ingredient specificity and product
+  preferences" above.
 - `BasketQuote` — household id, retailer, shopping list id, line-item
   matches, total price, availability/substitution notes, fetched-at
   timestamp.

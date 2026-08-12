@@ -53,8 +53,12 @@ scope for MVP versus later is expressed by the build order in
   get wrong or skip for *this* dish (e.g. resting the meat, reducing a
   sauce to a specific consistency, when to deglaze). Terse and
   information-dense over narrated and long.
-- Applies uniformly regardless of source, so this is a shared
-  "house style" instruction in both the suggestion-generation prompt
+- Ingredients are specified **precisely enough to buy**, not just to
+  cook: "500g beef mince, 12% fat", not "mince". The model knows what
+  the dish wants, so making it say so up front removes most shopping
+  ambiguity before it exists.
+- Both rules apply uniformly regardless of source, so they're shared
+  "house style" instructions in both the suggestion-generation prompt
   and the photo-to-recipe extraction prompt — see `architecture.md`.
 
 ## Recipe capture from a photo
@@ -74,6 +78,19 @@ scope for MVP versus later is expressed by the build order in
   rather than ordering the same ingredient several times.
 - Produce sensible **purchasable quantities** (e.g. round up to pack
   sizes actually sold), not just raw recipe quantities.
+- **Resolve ambiguous ingredients without nagging.** "Mince" has to
+  become a specific, orderable product (which meat, what fat content,
+  which product tier). The app resolves this by generating precise
+  ingredients in the first place, inferring from dish context where a
+  photographed recipe is vague, and applying standing household
+  preferences — **asking only when a choice is genuinely new and
+  consequential, and remembering the answer permanently.** Questions
+  are batched into the basket-review step, never interrupting meal
+  planning. See `architecture.md`, "Ingredient specificity and product
+  preferences."
+- Every basket line is shown resolved to a real product with a
+  sensible default, with **guessed lines visually flagged** so
+  correcting one is easy but never mandatory.
 
 ## Ordering
 
@@ -83,6 +100,10 @@ scope for MVP versus later is expressed by the build order in
   grocery partnerships. See `decisions.md`.
 - Owner **chooses** which supermarket to order from (not fully
   automatic choice).
+- Comparison must be **like-for-like** — the same specified product
+  tier at each retailer, not one retailer's value range against
+  another's premium. Where a retailer has no equivalent, say so
+  rather than silently substituting.
 - **Reserve a delivery slot and complete the order.** Phased: starts
   as an assisted handoff (Gusteau prepares the basket, owner does the
   final pay/confirm step on the retailer's own app/site), with fully

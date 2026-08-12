@@ -182,3 +182,32 @@ cheap to verify with a handful of real prompts before writing any
 application code around it, rather than discovering a quality problem
 after the suggestion service, data model, and UI are already built on
 top of the assumption.
+
+## 2026-08-12 — Ingredient disambiguation: ask rarely, never twice
+
+**Decided:** resolving an ambiguous ingredient like "mince" into a
+specific orderable product follows an escalation ladder rather than
+interrogating the owner: (1) the recipe house style requires the LLM
+to emit buyable ingredient specs up front, (2) the LLM infers from
+dish context where a photo-derived recipe is genuinely vague, (3)
+standing household `IngredientPreference` records resolve product tier
+and spec silently, (4) the app asks only when a choice is both novel
+and consequential, and (5) every answer is stored as a standing
+preference so it's never asked again. Questions are batched into the
+basket-review step, never surfaced during meal planning, and every
+line is pre-resolved to a default with guessed lines flagged — so
+correcting is optional, not blocking. Preferences are stored
+**retailer-neutrally**, with per-retailer product IDs only as a
+revalidated cache. See `architecture.md`.
+
+**Why:** the owner asked how the app would know which kind of mince to
+order, correctly anticipating that it would have to ask sometimes. It
+does — but a system that asks the same procurement question every week
+would be worse than the meal-kit services this replaces. Most
+ambiguity is avoidable for free at generation time, most of the rest
+is a one-off standing preference, so the genuine question budget is
+small and shrinks to near zero after the first few weeks. The
+retailer-neutral storage requirement fell out of the same thinking:
+price comparison across retailers is actively misleading unless it
+compares the same product tier at each, which is impossible if a
+preference is stored as one retailer's SKU.

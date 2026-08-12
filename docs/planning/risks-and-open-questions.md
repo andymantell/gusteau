@@ -80,6 +80,33 @@ chosen in Q1 — flagged here so it's not underestimated when iterations
 are sized. Note it also depends entirely on §9: there's nothing to
 match against without a source of product/price data.
 
+**Design approach now decided** (2026-08-12, prompted by the "how do
+you know which mince?" question) — see `architecture.md`, "Ingredient
+specificity and product preferences", and `decisions.md`. In short:
+generate precise ingredients up front, infer from dish context,
+learn standing preferences, ask only for novel and consequential
+choices, batch questions into basket review, and store preferences
+retailer-neutrally so price comparison stays like-for-like.
+
+**Still genuinely uncertain**, and only answerable once §9 settles
+where catalog data comes from:
+
+- **How good is fuzzy matching in practice?** Mapping "beef mince,
+  12% fat, 500g, standard own-brand" onto a specific retailer SKU is
+  the actual hard engineering, and its difficulty depends entirely on
+  what the data source gives us (a structured aggregator feed is a
+  very different problem from scraped search-result HTML).
+- **Does an LLM call belong in the matching loop?** Plausibly a good
+  fit for fuzzy product matching, but a per-line Bedrock call across
+  four retailers has real token cost against the £15/month ceiling.
+  Likely answer is deterministic matching first with LLM fallback for
+  unresolved lines, plus caching — but this needs measuring, not
+  assuming.
+- **Pack-size rounding across merged recipes** interacts with waste:
+  three recipes needing 300g total shouldn't order 3×500g. Rounding
+  happens after merging, on the summed quantity — easy to state, worth
+  testing against real weekly plans.
+
 ## 9. Where does product & price data come from? *(open — biggest remaining risk)*
 
 Surfaced during plan review 2026-08-12. The assisted-handoff decision

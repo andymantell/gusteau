@@ -72,10 +72,17 @@ block anything before it.
 
 ## Iteration 4 — Shopping list generation
 - Ingredient normalisation and cross-recipe merging for a week's plan.
-- Purchasable-quantity rounding.
-- Flutter: shopping list screen.
+- Purchasable-quantity rounding, applied to merged totals so three
+  recipes needing 300g between them don't order three packs.
+- `IngredientPreference` store plus the ask-once-remember-forever
+  flow: resolve from the recipe, infer from dish context, apply
+  standing preferences, and ask only for novel consequential choices —
+  batched into the review screen (see `architecture.md`, "Ingredient
+  specificity and product preferences").
+- Flutter: shopping list / basket review screen, every line resolved
+  with a default, guessed lines flagged and one-tap correctable.
 - **Outcome:** one clean shopping list per week instead of per-recipe
-  lists.
+  lists, and the app stops asking about mince after the first time.
 
 ## Iteration 5 — Price comparison *(highest-risk iteration — gated on a spike)*
 - **Gate: the product/price data feasibility spike from
@@ -86,6 +93,9 @@ block anything before it.
 - Retailer adapters (read-only): match shopping list items to
   retailer catalog/products, compute basket totals, for whichever of
   Tesco, Sainsbury's, Asda, and Waitrose the spike shows are viable.
+  Matching resolves each line's retailer-neutral spec per retailer so
+  comparison stays like-for-like; where a retailer has no equivalent
+  tier, surface it rather than silently substituting.
 - Spike (part of the same investigation): Amazon.co.uk's grocery
   partnerships (Morrisons/Co-op/Iceland + Amazon's own range) as a
   fifth channel; add an adapter if it stacks up, otherwise note why
