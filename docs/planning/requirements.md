@@ -144,9 +144,6 @@ scope for MVP versus later is expressed by the build order in
   picker**, which lists Google Drive alongside local storage and
   anything else installed. No Drive API, no OAuth, no Google Cloud
   project — and not locked to Drive.
-- The export can **optionally include photos**, which Auto Backup
-  excludes for quota reasons — so it's the only way original snapshots
-  survive a device loss.
 - A staleness nudge in settings ("last exported 8 weeks ago"), since a
   manual backup nobody runs isn't a backup.
 
@@ -159,6 +156,9 @@ scope for MVP versus later is expressed by the build order in
 - Both flows produce the same structured recipe object the rest of the
   system uses, so a photo-derived recipe can be added to the week just
   like an LLM-suggested one.
+- **The photo itself is not kept.** It's an input to extraction, not a
+  record — held until the recipe is confirmed, then deleted. Nothing
+  to store, sync or back up.
 
 ## Shopping list generation
 

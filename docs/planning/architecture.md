@@ -31,7 +31,6 @@ Flutter app (Android)  ◀── the system of record, and the "user"
 ├── On-device logic          ingredient merge, staple exclusion,
 │                            quantity/pack rounding, unit conversion,
 │                            prompt assembly, basket/checklist build
-├── Local photo store        captured recipe cards and food photos
 │
 └── HTTPS + API key ──▶ AWS
                          │
@@ -96,12 +95,13 @@ The app is the whole product; everything below runs on the handset.
   construction, and assembling the LLM prompt from your
   preference rules. None of this needs a server, so none of it gets
   one.
-- **Photos stay on the device.** Captured images are resized and
-  compressed locally, then sent as part of the inference request —
-  never stored in the cloud. Resizing is needed anyway to keep vision
-  token costs and request payloads down. They're excluded from backup
-  (see "Backup and durability"), so they live in a directory chosen
-  with that in mind.
+- **Photos are transient and never persisted.** A captured image is
+  resized locally, sent as part of the inference request, held only
+  until the extracted recipe is confirmed, then deleted. It's an input
+  to extraction, not a record — once the `Recipe` exists, the pixels
+  have no further job. Nothing is stored in the cloud either.
+  Resizing is needed anyway to keep vision token costs and payloads
+  down.
 - **Talks to AWS only for inference** (and possibly retailer product
   data — see below). Never holds AWS credentials directly; never talks
   to Bedrock without going through the proxy.
@@ -223,7 +223,7 @@ silently bites:
 - **The 25MB per-app quota.** Anything above it is silently not backed
   up. The database itself will stay far below that — text recipes are
   tiny — but **captured photos would blow through it quickly**, so
-  photos are excluded from backup (see below).
+  nothing large is stored to begin with (see below).
 - **Explicit backup rules, not defaults.** Declare what's included via
   `dataExtractionRules` (Android 12+) with the legacy
   `fullBackupContent` for older versions, rather than relying on
@@ -234,13 +234,11 @@ silently bites:
   device/emulator and confirming the data comes back intact — and
   repeating that whenever the schema changes materially.
 
-**Photos are deliberately excluded from backup.** They'd consume the
-whole quota, and they're the least valuable thing stored: the
-*extracted recipe* is what matters, and it's already saved as a
-`Recipe` in the database. A restored install therefore comes back with
-every recipe, favourite and preference intact, minus the original
-snapshots — an acceptable trade, and one to state in the UI rather
-than let the owner discover.
+**There are no photos to back up.** Captured images are discarded once
+the recipe is extracted (see "Client"), so the database is all there
+is — text, comfortably inside the quota with room to spare. This
+removes what would otherwise have been the awkward part of the backup
+story.
 
 **Timing caveat:** Auto Backup runs roughly daily, and only when the
 device is idle, charging and on unmetered Wi-Fi. So the exposure
@@ -262,10 +260,9 @@ stick), so "back up to Drive" works without Gusteau integrating with
 Drive at all — and the owner isn't locked to Drive if they'd rather
 put it elsewhere.
 
-- **Export** writes a single archive: the database as JSON, plus
-  **optionally the photos** — which Auto Backup deliberately excludes
-  for quota reasons, so this is the only route by which original
-  snapshots survive a device loss.
+- **Export** writes the database as a single JSON file. That's the
+  entirety of the app's data — there are no photos or binary assets to
+  package.
 - **Import** reads the same archive back through the picker, for a new
   phone or a recovery.
 - The export is **plaintext**. For recipe data that's a reasonable

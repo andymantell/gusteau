@@ -175,8 +175,9 @@ silently:
   error at backup time. Needs a WAL checkpoint before backup and
   explicit exclusion of `-wal`/`-shm`. **This is the one most likely
   to be discovered too late.**
-- **25MB per-app quota**, silently truncating anything larger. Drives
-  the decision to exclude photos from backup.
+- **25MB per-app quota**, silently truncating anything larger. Not a
+  practical constraint now that photos are discarded after extraction
+  — the database is text — but worth knowing the limit exists.
 - **Never-tested restore.** Iteration 0 includes an actual
   install-and-restore test on a clean device, repeated when the schema
   changes.
@@ -209,10 +210,9 @@ skip. See `architecture.md`.
 - Up to ~24 hours of recent changes may be unbacked, since Auto Backup
   runs roughly daily on charge/idle/Wi-Fi. Immaterial for weekly meal
   planning.
-- Original photos are not restored *by Auto Backup* (excluded by the
-  quota decision) — the extracted recipes are, which is the part that
-  matters. The file-picker export can include photos, so they're
-  recoverable if that's been run.
+- No photos are restored, because none are kept — they're discarded
+  once the recipe is extracted. The recipes themselves restore fine,
+  which is the part that ever mattered.
 
 ## 11. Multi-user and sync
 

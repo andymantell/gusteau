@@ -15,8 +15,9 @@ install from a phone, so CI isn't a nicety here — it's the only route
 to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
 
 - **One-time manual step (the only one):** deploy
-  `infra/github-oidc.yaml` via the AWS console to create the OIDC
-  provider and deploy role. Everything after this is automated.
+  `infra/github-oidc.yaml` to create the OIDC provider and deploy
+  role — one paste into **AWS CloudShell**, which works in a phone
+  browser (see `ci-cd.md`). Everything after this is automated.
 - **Supply-chain rule from the outset:** only `actions/*` (GitHub's
   own) actions, SHA-pinned; anything else hand-rolled in bash —
   including the OIDC exchange, so no third-party code sits between the
@@ -40,9 +41,9 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
   pre-migration snapshot, since a bad migration here destroys the only
   copy (see `ci-cd.md`, "Testing strategy").
 - **Android Auto Backup, configured properly** — explicit
-  `dataExtractionRules`/`fullBackupContent`, a `BackupAgent` that
-  checkpoints the SQLite WAL before backup, `-wal`/`-shm` excluded,
-  photos excluded from the 25MB quota. Then an **actual
+  `dataExtractionRules`/`fullBackupContent`, and a `BackupAgent` that
+  checkpoints the SQLite WAL before backup, with `-wal`/`-shm`
+  excluded. Then an **actual
   install-and-restore test on a clean device** to prove it works, not
   assume it (see `architecture.md`, "Backup and durability").
 - CDK app skeleton (Python): API Gateway HTTP API with an API key and
@@ -124,15 +125,14 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
   of always starting from a blank LLM suggestion.
 
 ## Iteration 3 — Photo-to-recipe
-- Photo capture (recipe card and food), resized and compressed
-  on-device, sent through the proxy to Bedrock → structured `Recipe`
-  stored locally. **Photos stay on the device** — no S3. Simple,
-  general-purpose prompt — no cookery specialisation or preference
-  grounding needed (see `architecture.md`), so this doesn't depend on
-  iteration 1's LLM spike.
-- Photos written to a backup-excluded directory (the 25MB Auto Backup
-  quota won't take them), with the UI saying plainly that a restored
-  install keeps the recipes but not the original snapshots.
+- Photo capture (recipe card and food), resized on-device, sent
+  through the proxy to Bedrock → structured `Recipe` stored locally.
+  Simple, general-purpose prompt — no cookery specialisation or
+  preference grounding needed (see `architecture.md`), so this doesn't
+  depend on iteration 1's LLM spike.
+- **The image is transient**: held only until the extracted recipe is
+  confirmed, then deleted. It's an input to extraction, not a record.
+  Nothing goes to S3, and nothing accumulates on the device.
 - Slot into the weekly plan alongside LLM-suggested recipes.
 - **Outcome:** owner can photograph something and get a usable recipe
   back, added to their week.
@@ -159,9 +159,9 @@ All on-device — this iteration adds no AWS resources.
   staples. Editable list screens for `IngredientPreference` and
   `PantryStaple`, per the no-hidden-learned-state principle.
 - **Export/import via the Android system file picker** (Drive, local,
-  or anywhere else the owner has), optionally including photos, plus a
-  staleness nudge in settings — the deliberate, portable layer over
-  Auto Backup's automatic one (`risks-and-open-questions.md` §10).
+  or anywhere else the owner has), plus a staleness nudge in settings
+  — the deliberate, portable layer over Auto Backup's automatic one
+  (`risks-and-open-questions.md` §10).
 - **Outcome:** one clean shopping list per week instead of per-recipe
   lists; the app stops asking about mince after the first time, and
   stops trying to sell you olive oil you already have.

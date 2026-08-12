@@ -168,11 +168,26 @@ is the better variant — see "Approval from a phone" below.
 
 The role that lets CI deploy can't itself be deployed by CI. So the
 OIDC provider and role live in a small CloudFormation template,
-`infra/github-oidc.yaml`, deployed **once, by hand**, via the AWS
-console's "Create stack → upload template". Keeping it as a template
-rather than console clicking means it's version-controlled and
-reproducible, and it's a single console action — feasible from a phone
-browser if impatient, trivial from a PC.
+`infra/github-oidc.yaml`, deployed **once, by hand**.
+
+**Do it from AWS CloudShell, which works in a phone browser.** It's a
+terminal with your credentials already loaded, so the whole bootstrap
+is one paste:
+
+```bash
+curl -sSfLO https://raw.githubusercontent.com/andymantell/gusteau/main/infra/github-oidc.yaml
+aws cloudformation deploy   --template-file github-oidc.yaml   --stack-name gusteau-github-oidc   --capabilities CAPABILITY_NAMED_IAM
+aws cloudformation describe-stacks   --stack-name gusteau-github-oidc   --query 'Stacks[0].Outputs' --output table
+```
+
+The last command prints the role ARN to paste into GitHub as a
+repository variable. Pasting into CloudShell on a phone is far less
+painful than navigating the IAM console's role-creation flow, and
+avoids the CloudFormation console's file-upload step (which wants a
+local file or an S3 URL — a GitHub raw URL won't do).
+
+Keeping it as a template rather than console clicking also means it's
+version-controlled and reproducible.
 
 It creates: the OIDC identity provider for
 `token.actions.githubusercontent.com`, and the deploy role with the
