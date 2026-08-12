@@ -163,3 +163,22 @@ need), and dropping the external recipe corpus means no vector store
 and smaller Bedrock prompts. The main deliberate design discipline
 this adds is avoiding NAT Gateway/ALB, which are the classic ways a
 "serverless" app ends up with a surprise fixed monthly cost.
+
+## 2026-08-12 — Validate "generic model is good enough" before building on it
+
+**Decided:** treat "a general Bedrock model, no fine-tuning, no RAG,
+can already write good recipes" as a hypothesis to test directly, not
+assume — add a small manual prompt spike as the literal first step of
+iteration 1, before the suggestion service is built. Same spike also
+compares Bedrock model tiers for cost (£15/month budget) and runs the
+Hugging Face specialist-model comparison already planned. See
+`architecture.md`.
+
+**Why:** the owner asked whether generic models can do this, on the
+reasoning that recipes/cooking content are well represented in
+general pretraining data. That's a reasonable hypothesis — recipe
+generation is a commonly-cited strength of general LLMs — but it's
+cheap to verify with a handful of real prompts before writing any
+application code around it, rather than discovering a quality problem
+after the suggestion service, data model, and UI are already built on
+top of the assumption.

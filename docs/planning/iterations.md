@@ -24,13 +24,18 @@ meant to leave the owner with something usable on their own phone.
   level.
 
 ## Iteration 1 — Recipe suggestions (core loop)
+- **Step zero, before building the service:** a small manual prompt
+  spike against candidate Bedrock models — confirms a generic model
+  is actually good at recipe generation without fine-tuning/RAG, and
+  picks the cheapest model tier that's good enough (see
+  `architecture.md`, "Recipe suggestion generation").
+- Same spike, extended: evaluate a Hugging Face cookery model via
+  Bedrock Custom Model Import against the same prompts; keep only if
+  it demonstrably wins (see `decisions.md`). Scoped to suggestion
+  generation only, not photo-to-recipe (iteration 3).
 - Bedrock integration for recipe suggestion generation (general model,
   cookery-focused prompting, no external corpus — see
   `architecture.md`).
-- Time-boxed spike: evaluate a Hugging Face cookery model via Bedrock
-  Custom Model Import against the same prompts; keep only if it
-  demonstrably wins (see `decisions.md`). Scoped to suggestion
-  generation only, not photo-to-recipe (iteration 3).
 - `Household` / `User` / `WeeklyPlan` / `Suggestion` / `Recipe` data
   model in DynamoDB.
 - "Suggest N recipes for the week" + per-suggestion refresh.

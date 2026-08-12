@@ -142,30 +142,59 @@ What's actually out there:
   of open-ended recipe reasoning (substitutions, working from a fuzzy
   owner preference like "too spicy").
 
+**Why a generic frontier model should be good at this without any
+special training:** recipes, cooking forums, and food blogs are a
+large and well-represented slice of the web-scale text general
+foundation models are pretrained on — recipe generation is one of the
+more commonly-cited "the model already knows this well" tasks for
+general LLMs. That's the working hypothesis behind treating
+prompt-only, no fine-tune, no RAG as a credible primary path rather
+than something that obviously needs a specialist model — but it's a
+hypothesis, not something to take on faith, hence testing it directly
+rather than assuming it (see the spike below).
+
 Given that, the plan for suggestion generation is:
 
-1. **Primary path — prompt engineering on a strong general model**
-   (e.g. a Claude model on Bedrock): a system prompt encoding cookery
-   expertise, with the household's standing preferences and dismissal
-   reasons injected into every request. **No external recipe corpus
-   required** — see "Grounding data" below for why, and where a
-   retrieval step fits in later without needing one upfront. Fast to
-   build, easy to iterate, no training pipeline.
-2. **Iteration-1 spike — evaluate a Hugging Face cookery model as a
+1. **Step zero — a small prompt/model spike before building anything
+   around it.** Before investing in the suggestion service, run a
+   handful of realistic test prompts (varied cuisines, a fuzzy
+   preference like "not too spicy", an ingredient-substitution ask)
+   directly against candidate Bedrock models by hand — a cheap and
+   fast way to test the "generic model is already good at this"
+   hypothesis above before committing to it. Two things fall out of
+   this spike:
+   - **Quality check** — confirm output is genuinely good (correct,
+     well-formed, follows the `method` house style) without any
+     fine-tuning or RAG. If it isn't, that's the point to reconsider,
+     not after the suggestion service is built around the assumption.
+   - **Model tier / cost check** — compare a cheaper/smaller Bedrock
+     model against a more capable one on the same prompts, and default
+     to the cheapest tier that's good enough (ties into the £15/month
+     budget — see "Cost and frugality"), stepping up only where
+     evaluation shows it's actually needed.
+2. **Primary path — prompt engineering on a strong general model**
+   (e.g. a Claude model on Bedrock, at whichever tier the spike
+   above settles on): a system prompt encoding cookery expertise, with
+   the household's standing preferences and dismissal reasons injected
+   into every request. **No external recipe corpus required** — see
+   "Grounding data" below for why, and where a retrieval step fits in
+   later without needing one upfront. Fast to build, easy to iterate,
+   no training pipeline.
+3. **Same spike, extended — evaluate a Hugging Face cookery model as a
    supplement**, imported via **Bedrock Custom Model Import** (which
    supports a specific set of open architectures — broadly
    Llama/Mistral/Mixtral-family and a few others; confirm the chosen
-   model's architecture is supported before committing). Run it
-   side-by-side on the same suggestion prompts as (1) and only keep it
-   in the design — e.g. as a specialised sub-step for a narrow task
-   like ingredient substitution — if it demonstrably beats prompt+RAG
-   on a general model. Time-boxed; not a hard dependency for iteration
-   1 to ship. **Scoped to suggestion generation only** — see below for
-   why it doesn't apply to the photo feature.
-3. **Fine-tuning our own model** stays as a later option, not pursued
+   model's architecture is supported before committing). Run it on the
+   same test prompts and rubric as step zero, and only keep it in the
+   design — e.g. as a specialised sub-step for a narrow task like
+   ingredient substitution — if it demonstrably beats the general-model
+   baseline. Time-boxed; not a hard dependency for iteration 1 to ship.
+   **Scoped to suggestion generation only** — see below for why it
+   doesn't apply to the photo feature.
+4. **Fine-tuning our own model** stays as a later option, not pursued
    now — for a single-household tool the effort of maintaining a
-   training pipeline is hard to justify unless (1) and (2) both prove
-   insufficient.
+   training pipeline is hard to justify unless the spike and its
+   follow-ups both prove insufficient.
 
 #### Grounding data — no recipe corpus needed upfront
 
