@@ -76,10 +76,10 @@ deliberately after the core concept has proved itself in real use.
 - Rescaling: a favourite picked for a week whose portion count differs
   from the recipe's `serves` is re-expressed via one LLM call and
   cached as a variant, so it's free on every later reuse.
-- **Repeat cooldown** — recently cooked recipes filtered out of LLM
-  suggestions for a configurable number of weeks, enforced app-side
-  rather than by prompt instruction; favourite picks exempt (see
-  `architecture.md`).
+- **Repeat cooldown** — recent meal history sent into the suggestion
+  prompt, plus a structural near-duplicate check (protein + method +
+  cuisine) on the response that silently regenerates a match.
+  Favourite picks exempt (see `architecture.md`, "Repeat cooldown").
 - Dismissal reasons (negative) and favourites (positive) both fed back
   into the suggestion prompt context; when the LLM fills remaining
   slots it's given the recipes already sitting in the other slots for

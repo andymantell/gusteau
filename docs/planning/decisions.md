@@ -480,3 +480,43 @@ ordering, and adopting it does not reverse the assisted-handoff
 decision. Notably, the most capable open implementation available
 independently arrived at the same stopping point Gusteau had already
 chosen for its own reasons.
+
+## 2026-08-12 — Repeat cooldown: prompt-led, with a structural backstop
+
+**Decided:** recently cooked meals — and near variations of them —
+don't come back as unprompted suggestions for a configurable window
+(default ~6 weeks). Mechanism: send the recent history into the
+suggestion prompt as the primary control, and back it with a cheap
+app-side near-duplicate check on the response, comparing structured
+attributes the model already emits (primary protein/ingredient,
+cooking method, cuisine). A match is silently regenerated. Favourite
+picks are exempt; the window reads accepted suggestions, not
+everything ever generated. See `architecture.md`, "Repeat cooldown".
+
+**Corrects an earlier framing in this plan** that described the
+cooldown as an app-side filter on recipe identity, in preference to a
+prompt instruction. The owner pointed out that this doesn't work, and
+they're right: the LLM generates fresh text each time, so a repeat
+arrives as a *different* `Recipe` with a different id and title —
+"roast chicken thighs with fennel and olives" three weeks after
+"chicken thigh traybake with fennel and lemon". Identity matching
+would only ever have caught re-picking a stored recipe, which is the
+favourites path, and favourites are exempt. The real problem is
+near-duplicate detection, not identity.
+
+**Why prompt-first:** it's the only mechanism that gets *semantic*
+similarity for free — a model understands that a traybake and a roast
+with the same components are the same dinner, where no cheap
+deterministic check does. It costs a few hundred tokens.
+
+**Why a backstop at all:** prompt instructions do get dropped, and the
+structural check is nearly free given the attributes are already being
+emitted. It's deliberately coarse — the cost of a false positive is
+one extra generation the owner never sees, so bluntness is cheap and
+leakage is what actually hurts.
+
+**Upgrade path if the coarse check proves inadequate:** embedding
+similarity over title plus ingredients, stored locally and
+cosine-compared against the recent set. Precise, and brute force over
+a few dozen vectors is trivial on-device — but it adds a dependency
+and a column, so not before the simple version is shown to fail.

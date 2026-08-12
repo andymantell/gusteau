@@ -52,11 +52,14 @@ scope for MVP versus later is expressed by the build order in
 - Any good recipe can be **saved as a favourite**, regardless of where
   it came from (LLM suggestion, photo-to-recipe, or manual entry).
   Favourites live in the on-device database.
-- **Repeat cooldown:** a recipe you've cooked recently isn't offered
-  again as an LLM suggestion for a configurable number of weeks
-  (default around 6). Picking a favourite yourself is exempt — the
-  cooldown only governs what the app offers unprompted, never what you
-  choose.
+- **Repeat cooldown:** something you've cooked recently — *or a near
+  variation of it* — isn't offered again as an LLM suggestion for a
+  configurable number of weeks (default around 6). Done by sending the
+  recent history into the prompt, with a cheap structural check on the
+  way back as a backstop; see `architecture.md`, "Repeat cooldown",
+  for why matching on recipe identity alone wouldn't work. Picking a
+  favourite yourself is exempt — the cooldown only governs what the
+  app offers unprompted, never what you choose.
 - When planning a week, the owner can **fill some of the N slots from
   favourites** directly instead of an LLM suggestion, and have the LLM
   **fill the remaining slots** — aware of which favourites have

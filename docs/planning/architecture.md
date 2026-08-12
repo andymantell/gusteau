@@ -361,6 +361,9 @@ both prompts, rather than being decided independently by each:
   blind: specific temperatures/times, ordering that matters, and any
   step that's easy to get wrong for *this* dish. See `requirements.md`
   for the full spec.
+- **A few structured attributes** emitted alongside the prose —
+  primary protein/ingredient, cooking method, cuisine. Free to ask
+  for, and they're what the repeat-cooldown check compares on.
 - **Rough nutrition estimates per portion** — approximate calories and
   macros, emitted alongside the recipe. Free in practice: the model is
   already generating the recipe, so this costs a few extra tokens and
@@ -529,22 +532,61 @@ for exactly the same reason.
 
 #### Repeat cooldown
 
-A recipe cooked within the last N weeks (configurable, default around
-6) is excluded from LLM suggestions. This is enforced **as a filter on
-the app's side, not as a prompt instruction** — the recently-cooked
-set is excluded when suggestions come back, rather than merely asked
-for in the prompt, because prompt instructions get dropped and this is
-cheap to guarantee deterministically.
+The goal: a recipe cooked within the last N weeks (configurable,
+default around 6) shouldn't come back as an unprompted suggestion —
+and neither should a near-identical variation of it. This guards
+against the failure mode that would quietly kill the app's value:
+LLMs converge, and without a check the suggestions drift toward the
+same handful of dishes over months.
 
-It applies only to unprompted suggestions. Picking a favourite is
+**Recipe identity is the hard part here, and it rules out the obvious
+approach.** The LLM generates fresh text every time, so a repeat
+almost never arrives as the same `Recipe` — it arrives as "Roast
+chicken thighs with fennel and olives" three weeks after "Chicken
+thigh traybake with fennel and lemon". Different id, different title,
+same dinner. Filtering by recipe id would therefore catch essentially
+nothing: the only thing it stops is re-picking a *stored* recipe,
+which is the favourites path, and favourites are exempt by design.
+Near-duplicate detection, not identity matching, is the actual
+problem.
+
+**Primary mechanism: tell the model.** The recently-cooked set goes
+into the suggestion prompt — "here's what we've eaten in the last six
+weeks; don't repeat these or anything close to them". Titles plus a
+few key attributes, not full recipes, so it stays cheap (a few hundred
+tokens). LLMs are good at this instruction, and it's the only
+mechanism that can catch *semantic* similarity for free, because it
+understands that a traybake and a roast with the same components are
+the same meal.
+
+**Backstop: a cheap structural check on the way back.** Prompt
+instructions do get dropped, so accept the suggestion only after
+comparing it against the cooldown window on structured attributes the
+model is already emitting anyway — **primary protein/ingredient,
+cooking method, and cuisine**. A new suggestion matching all three of
+something recent (chicken + roast + Mediterranean) is treated as a
+near-duplicate and silently regenerated. Coarse, deterministic, needs
+no extra call and no new dependency, and it catches precisely the
+loud, obvious failure the prompt might let through.
+
+Being coarse is acceptable *because the consequence is only a
+regeneration* — a false positive costs one extra call and the owner
+never sees it. If in practice it proves too blunt (rejecting genuinely
+different dishes) or too leaky, the upgrade path is embedding
+similarity: embed title plus ingredients on creation, store the
+vector locally, cosine-compare against the recent set. Brute force
+over a few dozen vectors is trivial on-device, and Bedrock's embedding
+models are cheap — but it's a dependency and a column, so it's not
+worth adding before the simple version has been shown to fail.
+
+**Applies only to unprompted suggestions.** Picking a favourite is
 always allowed regardless of when it was last cooked — the cooldown
 governs what the app offers, never what the owner chooses.
 
-The purpose is guarding against the failure mode that would quietly
-kill the app's value: LLMs converge, and without a hard rule the
-suggestions drift toward the same handful of dishes over months. The
-cooldown is also why `Recipe` history is worth keeping indefinitely
-rather than pruning.
+The cooldown window reads **accepted** suggestions — recipes that made
+it into a completed week — not everything that was ever generated and
+refreshed away. It's also why `Recipe` history is worth keeping
+indefinitely rather than pruning.
 
 #### Favourites — the positive mirror of dismissal, and filling the week
 
@@ -772,7 +814,10 @@ so everything below is implicitly "mine" (see `decisions.md`).
   per-portion nutrition (kcal + macros, LLM-estimated, informational),
   source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /
-  manual), tags (cuisine, time, difficulty). Scaled re-expressions are
+  manual), tags (cuisine, time, difficulty), plus **primary
+  protein/ingredient and cooking method** — emitted by the model
+  alongside the recipe and used by the repeat-cooldown near-duplicate
+  check (see "Repeat cooldown" above). Scaled re-expressions are
   cached as variants keyed on `(recipe_id, serves)` — see "Portions
   and recipe scaling" above.
 - `WeeklyPlan` — week id, `portions` and `meal_count` (seeded from
