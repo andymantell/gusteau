@@ -12,9 +12,26 @@ scope for MVP versus later is expressed by the build order in
 - Client is a **Flutter** app, **Android** only for now.
 - Recipe/ingredient intelligence runs on **AWS Bedrock**.
 
+## Plan configuration — portions and meals per week
+
+- A **settings screen** holds the household defaults: **portions per
+  meal** and **number of meals per week**.
+- When planning a new week, both are **surfaced as overridable for
+  that week** — a one-off "cooking for 6 this week" or "only need 3
+  meals" without changing the defaults. Defaults are pre-filled, so
+  the common case is to leave them alone.
+- **Portions are consistent across all meals in a week** — there is
+  deliberately no per-meal portion override. Keeps the model and the
+  UI simple.
+- Portion count drives real ingredient quantities: recipes are
+  generated at the week's portion count rather than scaled after the
+  fact, so quantities, egg counts, pan sizes and timings stay sensible
+  — see `architecture.md`, "Portions and recipe scaling."
+
 ## Recipe suggestions
 
-- Suggest **N recipes per week** (N configurable).
+- Suggest **N recipes per week**, where N is the week's meal count
+  (from settings, overridable per week — see above).
 - Each suggestion can be **refreshed** independently — swap just that
   one recipe for a different suggestion — repeatable until the owner
   is happy with the week's line-up.
@@ -165,7 +182,6 @@ scope for MVP versus later is expressed by the build order in
 ## Not yet specified (owner to flesh out over time)
 
 - Nutrition tracking / dietary constraints (allergies, macros, calories).
-- Portion counts / household size per meal.
 - Meal history / repeats — how often the same recipe is allowed to
   reappear.
 - Notifications (e.g. "your basket is ready to review", "slot booked").

@@ -271,4 +271,29 @@ inaccessible" (a well-ordered checklist alongside the Sainsbury's app
 is genuinely usable). It also gets the complete loop into real weekly
 use sooner, which is the fastest way to learn what actually needs
 building next — and comparison is a clean bolt-on afterwards precisely
-because nothing else depends on it.
+because nothing else depends on it. Sainsbury's confirmed as the
+owner's usual supermarket, so v1 targets where they actually shop.
+
+## 2026-08-12 — Portions and meals per week: defaults plus per-week override
+
+**Decided:** a settings screen holds household defaults for portions
+per meal and meals per week. Both are surfaced as overridable when
+planning a new week (pre-filled from the defaults), for one-off
+changes without editing the defaults. **Portions are uniform across a
+week's meals — no per-meal override**, on the owner's explicit
+instruction. Implementation-wise, the week's portion count goes into
+the generation prompt so recipes arrive at the right quantities rather
+than being scaled arithmetically afterwards; reused favourites and
+photo recipes whose `serves` differs get one LLM re-expression, cached
+as a variant keyed on `(recipe_id, serves)`. See `architecture.md`,
+"Portions and recipe scaling."
+
+**Why:** the owner asked for exactly this shape, and the
+no-per-meal-override simplification is a good one — it keeps
+`WeeklyPlan` holding a single portion count instead of pushing it down
+onto every `Suggestion`, and keeps the planning UI to two numbers.
+Generating at the target count rather than scaling afterwards avoids
+the classic scaling failures (1.5 eggs, non-linear seasoning, pan
+sizes, timings) at no extra cost, since it's the same LLM call either
+way. Caching rescaled variants keeps repeat use of favourites free,
+which matters against the £15/month ceiling.

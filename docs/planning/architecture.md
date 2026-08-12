@@ -286,6 +286,42 @@ deliberately simple:
   model on Bedrock, since it isn't leaning on niche cookery reasoning
   the way suggestion generation is.
 
+## Portions and recipe scaling
+
+Portion count is set per week (defaulting from household settings) and
+applies uniformly to every meal in that week — no per-meal override,
+by design. It has to reach the actual ingredient quantities, or the
+shopping list is wrong.
+
+**Generate at the target portion count; don't scale afterwards.**
+Arithmetic scaling of a finished recipe breaks in obvious ways — 1.5
+eggs, seasoning that isn't linear, a pan that's now too small, a
+roasting time that should have changed. The LLM knows all of that, so
+the week's portion count goes into the generation prompt and recipes
+come back already correct for it. This is free: it's the same call
+either way.
+
+**Reused recipes need one rescale, cached forever.** Favourites and
+photo-derived recipes were captured at whatever `serves` count they
+were written for. When one is picked for a week with a different
+portion count, Gusteau re-expresses it at the new count via a single
+LLM call and caches the result keyed on `(recipe_id, serves)`. So a
+favourite reused at 4 portions costs one extra call the first time and
+zero every time after — which matters against the £15/month ceiling
+given favourites are meant to be reused often.
+
+**Downstream this is uneventful**, which is the point: bigger
+quantities flow through cross-recipe merging, pack-size rounding, and
+staple thresholds unchanged. A staple stays a staple at 6 portions (4
+tbsp of oil is still oil you own); a borderline ingredient may cross
+its threshold and start being ordered, which is the correct behaviour.
+
+**Changing the meal count mid-planning** adds or removes slots:
+increasing appends empty slots for the LLM to fill (with the existing
+picks as context, per the favourites design); decreasing removes
+trailing slots, confirming first if that would discard a slot the
+owner has already accepted or filled from a favourite.
+
 ## Ingredient specificity and product preferences
 
 "Mince" is the canonical example of a problem that runs through the
@@ -419,15 +455,22 @@ Modelled as multi-household/multi-user from the start (see
 in practice. Every entity below that isn't global hangs off a
 `Household`, not off an implicit single owner.
 
-- `Household` — id, name, members.
+- `Household` — id, name, members, and settings: `default_portions`,
+  `default_meals_per_week`. These seed each new `WeeklyPlan` and are
+  edited on the settings screen.
 - `User` — id, household id, display name, auth identity (Cognito
   sub), own preference profile.
-- `Recipe` — id, title, ingredients[with qty+unit], method, source
+- `Recipe` — id, title, `serves` (the portion count these quantities
+  are written for), ingredients[with qty+unit], method, source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /
   manual), tags (cuisine, time, difficulty). Recipes themselves are
-  not household-scoped — they're shared, reusable content.
-- `WeeklyPlan` — household id, week id, list of `Suggestion` slots (N
-  per week). One shared plan per household, not one per member.
+  not household-scoped — they're shared, reusable content. Scaled
+  re-expressions are cached as variants keyed on
+  `(recipe_id, serves)` — see "Portions and recipe scaling" above.
+- `WeeklyPlan` — household id, week id, `portions` and `meal_count`
+  (seeded from household defaults, overridable per week), and a list
+  of `Suggestion` slots, `meal_count` of them. One shared plan per
+  household, not one per member.
 - `Suggestion` — slot id, current `Recipe`, `filled_via`
   (llm-suggestion / favourite-pick / photo-capture / manual-pick),
   refresh history, status (pending / accepted / dismissed-temporary /

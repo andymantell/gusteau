@@ -42,9 +42,15 @@ four.
   cookery-focused prompting, no external corpus — see
   `architecture.md`).
 - `Household` / `User` / `WeeklyPlan` / `Suggestion` / `Recipe` data
-  model in DynamoDB.
-- "Suggest N recipes for the week" + per-suggestion refresh.
-- Flutter: weekly plan screen, refresh button per slot.
+  model in DynamoDB, including household default portions and meals
+  per week, and the per-week overrides of both.
+- "Suggest N recipes for the week" + per-suggestion refresh, with the
+  week's portion count fed into the generation prompt so recipes come
+  back at the right quantities (see `architecture.md`, "Portions and
+  recipe scaling").
+- Flutter: settings screen (default portions, default meals per week);
+  weekly plan screen with both overridable for the week being planned,
+  pre-filled from defaults, and a refresh button per slot.
 - **Outcome:** owner gets a real week of suggestions and can refresh
   individual ones.
 
@@ -55,6 +61,9 @@ four.
 - Slot refresh gains a second source: fill from favourites instead of
   asking the LLM, so a week can be planned as a mix of both — see
   `architecture.md`.
+- Rescaling: a favourite picked for a week whose portion count differs
+  from the recipe's `serves` is re-expressed via one LLM call and
+  cached as a variant, so it's free on every later reuse.
 - Dismissal reasons (negative) and favourites (positive) both fed back
   into the suggestion prompt context; when the LLM fills remaining
   slots it's given the recipes already sitting in the other slots for
