@@ -293,6 +293,81 @@ settings, where it goes into the Android Keystore. Copy-paste between
 two apps on a phone is fine for something done once. The CDK stack
 outputs the key's *ID* (not its value), since deploy logs are public.
 
+## Testing strategy
+
+The app's headline behaviour comes from a model, which is
+non-deterministic and costs money — so the test suite deliberately
+does **not** try to test that. It tests everything around it, which is
+where bugs actually live.
+
+**Never call a live LLM in CI.** It's non-deterministic (flaky builds
+for reasons unrelated to the change), it costs tokens on every push,
+and a failure tells you nothing actionable. The prompt-quality
+question is answered by the manual eval below, not by CI.
+
+### What gets tested hard — the deterministic core
+
+All pure functions, all on-device, all table-driven:
+
+- **Ingredient merging** across recipes, including the nullable-
+  quantity cases that must be skipped rather than summed.
+- **Unit conversion** and the fixed unit enum.
+- **Pack-size rounding**, especially applied to merged totals (three
+  recipes needing 300g between them → one pack, not three).
+- **Pantry-staple exclusion**, particularly the quantity thresholds
+  that decide "2 tbsp oil, skip" vs "500ml oil, order".
+- **Prompt assembly** from preference rules — that enabled/disabled
+  and ordering are respected, and the recent-meals window is correct.
+- **Repeat-cooldown filtering** of the accepted-suggestion history.
+
+This list is essentially the whole of iteration 4 plus the planning
+logic, and it's exactly the code where a silent error produces a wrong
+shopping list rather than a crash.
+
+### Recipe parsing, against recorded fixtures
+
+Capture real model responses once — including the malformed ones,
+which are the valuable fixtures — and commit them. CI replays them
+against the schema validator: well-formed parses, truncated JSON
+fails cleanly, `"2-3 cloves"` lands as a null quantity with a note,
+`grams` vs `g` normalises. No tokens, fully deterministic, and the
+fixture set grows every time something new goes wrong in real use.
+
+### Migration tests — higher stakes than usual
+
+The database is the only copy of the data (see `architecture.md`), so
+a bad migration destroys the truth rather than a replica of it.
+
+- A **fixture database per schema version**, committed. Each test
+  migrates it forward to current and asserts the data survived —
+  not just that the migration ran without throwing.
+- The app takes an **automatic pre-migration snapshot** of the
+  database file before applying anything, kept until the next
+  successful launch, so a failure in the wild can roll back instead of
+  needing the Drive export.
+
+### CDK snapshot tests
+
+`cdk synth` compared against a committed template. Cheap, and it makes
+infrastructure changes visible in the PR diff — including the
+accidental ones, like a resource replacement that would delete
+something.
+
+### Widget tests, sparingly
+
+The couple of screens with real logic (basket review's resolved/
+guessed states, the preference-rule list). Not exhaustive UI coverage,
+which for a single-user app is effort better spent elsewhere.
+
+### The manual eval harness
+
+The iteration-1 model spike builds a script that runs a fixed set of
+realistic prompts against real Bedrock and shows the output for
+judgement. **Keep it rather than throwing it away** — it becomes the
+thing you run when changing a prompt, on demand, outside CI. It's the
+only honest way to answer "did that prompt change make suggestions
+better", and it stays a human judgement call.
+
 ## Cost
 
 Nothing. Public-repo Actions minutes are free, and the pipeline adds

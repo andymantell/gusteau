@@ -190,18 +190,29 @@ won't help either. The keystore therefore belongs wherever the JSON
 export is kept, not solely in GitHub secrets (which are write-only and
 can't be read back). See `ci-cd.md`.
 
+**The second layer: export/import via the system file picker.** Added
+2026-08-12 — the owner can export the database (optionally with
+photos) through Android's standard file-save sheet, which lists Google
+Drive alongside local storage and anything else installed. No Drive
+API, no OAuth, no Google Cloud project, and not locked to Drive. This
+is what covers the cases Auto Backup can't: losing the Google account
+itself, wanting a copy under the owner's own control, moving off the
+app, or recovering the photos that the quota forces Auto Backup to
+skip. See `architecture.md`.
+
 **Residual risks, accepted:**
 
-- Durability now depends on the owner's Google account remaining
-  accessible — account loss or lockout means losing the data. The JSON
-  export is the escape hatch for exactly this, which is why it stays
-  in the plan even though Auto Backup carries the main load.
+- Auto Backup depends on the owner's Google account remaining
+  accessible. The file-picker export covers that case, provided it's
+  been run and stored somewhere that isn't also the same Google
+  account — hence the staleness nudge in settings.
 - Up to ~24 hours of recent changes may be unbacked, since Auto Backup
   runs roughly daily on charge/idle/Wi-Fi. Immaterial for weekly meal
   planning.
-- Original photos are not restored (excluded by the quota decision).
-  The extracted recipes are, which is the part that matters — worth
-  saying in the UI rather than letting the owner find out.
+- Original photos are not restored *by Auto Backup* (excluded by the
+  quota decision) — the extracted recipes are, which is the part that
+  matters. The file-picker export can include photos, so they're
+  recoverable if that's been run.
 
 ## 11. Multi-user and sync
 

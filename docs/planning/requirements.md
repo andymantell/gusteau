@@ -125,6 +125,31 @@ scope for MVP versus later is expressed by the build order in
   "house style" instructions in both the suggestion-generation prompt
   and the photo-to-recipe extraction prompt — see `architecture.md`.
 
+## Editing and errors
+
+- **Every recipe is editable**, whatever produced it — the model gets
+  quantities wrong sometimes and recipe cards get misread. Edits are
+  in place; past weeks still show what was actually cooked even if a
+  recipe is later deleted. See `architecture.md`, "Editing recipes".
+- **Errors say what actually went wrong**, in plain terms, with the
+  underlying status or exception visible and copyable. No "something
+  went wrong". Single user, who is also the developer — vagueness
+  helps nobody. See `architecture.md`, "Error handling".
+
+## Backup and export
+
+- **Automatic:** Android Auto Backup to the owner's Google account,
+  so a lost phone doesn't mean lost data.
+- **Deliberate:** an **export/import through the Android system file
+  picker**, which lists Google Drive alongside local storage and
+  anything else installed. No Drive API, no OAuth, no Google Cloud
+  project — and not locked to Drive.
+- The export can **optionally include photos**, which Auto Backup
+  excludes for quota reasons — so it's the only way original snapshots
+  survive a device loss.
+- A staleness nudge in settings ("last exported 8 weeks ago"), since a
+  manual backup nobody runs isn't a backup.
+
 ## Recipe capture from a photo
 
 - Photograph a **recipe card** (or any written recipe) → LLM extracts

@@ -33,7 +33,10 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
   being able to upgrade in place (see `ci-cd.md`).
 - Flutter app skeleton with the **local SQLite layer** (Drift or
   equivalent) and migration tooling — this is the system of record, so
-  it gets set up properly on day one.
+  it gets set up properly on day one: per-version fixture databases
+  and forward-migration tests from the start, plus an automatic
+  pre-migration snapshot, since a bad migration here destroys the only
+  copy (see `ci-cd.md`, "Testing strategy").
 - **Android Auto Backup, configured properly** — explicit
   `dataExtractionRules`/`fullBackupContent`, a `BackupAgent` that
   checkpoints the SQLite WAL before backup, `-wal`/`-shm` excluded,
@@ -65,6 +68,13 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
 - Bedrock integration for recipe suggestion generation (general model,
   cookery-focused prompting, no external corpus — see
   `architecture.md`).
+- **The structured-output contract**: `Recipe` requested via Bedrock
+  tool-use, validated on-device, one automatic retry feeding the
+  validation error back, nullable quantities and a fixed unit enum
+  (see `architecture.md`). Everything downstream depends on this, so
+  it lands with the first generation code, not later.
+- Recorded-fixture tests for recipe parsing, including malformed
+  responses (see `ci-cd.md`, "Testing strategy").
 - `Settings` / `WeeklyPlan` / `Suggestion` / `Recipe` in the local
   schema, including default portions and meals per week, and the
   per-week overrides of both.
@@ -81,6 +91,9 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
 
 ## Iteration 2 — Preferences: favourites, dismissals, editable prompt
 - Temporary vs. permanent dismissal, reason capture UI.
+- Recipe editing and deletion, with cached rescaled variants
+  invalidated on edit and past weeks preserved on delete (see
+  `architecture.md`, "Editing recipes").
 - Favouriting a recipe (works on any `Recipe` regardless of source),
   stored locally.
 - **`PreferenceRule` list and its screen** — the personalised prompt
@@ -143,9 +156,10 @@ All on-device — this iteration adds no AWS resources.
   a collapsed "assumed you already have these" section for skipped
   staples. Editable list screens for `IngredientPreference` and
   `PantryStaple`, per the no-hidden-learned-state principle.
-- JSON export/import of the local database — the escape hatch for
-  Google-account loss and data portability, now that Auto Backup
-  carries the main durability load (`risks-and-open-questions.md` §10).
+- **Export/import via the Android system file picker** (Drive, local,
+  or anywhere else the owner has), optionally including photos, plus a
+  staleness nudge in settings — the deliberate, portable layer over
+  Auto Backup's automatic one (`risks-and-open-questions.md` §10).
 - **Outcome:** one clean shopping list per week instead of per-recipe
   lists; the app stops asking about mince after the first time, and
   stops trying to sell you olive oil you already have.

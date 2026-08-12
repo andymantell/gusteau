@@ -247,12 +247,69 @@ device is idle, charging and on unmetered Wi-Fi. So the exposure
 window is up to about a day of recent changes. For weekly meal
 planning that's immaterial.
 
-**JSON export/import remains**, with its justification changed. It's
-no longer the primary durability mechanism — it's the escape hatch:
-Google-account loss or lockout, moving the data somewhere else,
-inspecting it, or the app being abandoned. Worth keeping for a
-personal tool the owner wants to stay in control of, but it can sit
-later in the build order now that Auto Backup carries the main load.
+### Export/import via the system file picker
+
+Auto Backup is automatic but opaque and account-bound. The deliberate,
+portable layer is an **export the owner triggers**, written through
+Android's Storage Access Framework — the standard system "save file"
+sheet.
+
+Using SAF rather than the Google Drive API is the important choice:
+**no OAuth, no Google Cloud project, no Drive SDK, no third-party
+dependency.** The system picker already lists Drive as a destination
+alongside anything else installed (local storage, Dropbox, a USB
+stick), so "back up to Drive" works without Gusteau integrating with
+Drive at all — and the owner isn't locked to Drive if they'd rather
+put it elsewhere.
+
+- **Export** writes a single archive: the database as JSON, plus
+  **optionally the photos** — which Auto Backup deliberately excludes
+  for quota reasons, so this is the only route by which original
+  snapshots survive a device loss.
+- **Import** reads the same archive back through the picker, for a new
+  phone or a recovery.
+- The export is **plaintext**. For recipe data that's a reasonable
+  default, but the flow should say so rather than let the owner assume
+  otherwise.
+- A gentle staleness nudge ("last exported 8 weeks ago") on the
+  settings screen, since a manual backup nobody remembers to run is
+  not a backup.
+
+This covers the gap Auto Backup can't: losing access to the Google
+account itself, wanting the data somewhere under the owner's own
+control, moving off the app entirely, or getting the photos back.
+
+## Error handling
+
+One user, who is also the developer. So errors say exactly what
+happened, in plain terms, with no reassuring vagueness:
+
+- **Show the real failure.** "Bedrock returned 400: model
+  `x` not enabled in eu-west-2" rather than "Couldn't get suggestions."
+  If there's an underlying exception or HTTP status, it's on screen and
+  copyable.
+- **Distinguish transient from terminal.** A timeout or 5xx offers a
+  retry button. A terminal condition doesn't pretend retrying will
+  help.
+- **Name the specific ones that will actually happen:**
+  - *No connectivity* — say which feature needs it, and note that
+    plans, recipes and the shopping list all still work offline.
+  - *Monthly spend cap hit* (the API Gateway usage-plan quota — a
+    guard we deliberately added, so it will fire eventually): say
+    that's what happened, and when it resets. Not a bare 429.
+  - *Malformed model output after one retry* — say the response
+    failed validation, and show it, since that's a prompt bug worth
+    seeing.
+  - *Sainsbury's session expired* (~20 minutes) — say so and offer the
+    WebView login, rather than failing a basket operation cryptically.
+  - *Sainsbury's integration broken* — when the unofficial API shape
+    changes, say that explicitly and fall back to the checklist, so
+    it's obviously a Gusteau problem rather than seeming like the app
+    lost the shopping list.
+
+No error reporting service, no crash telemetry — consistent with
+local-first. Diagnosis is what's on screen plus the viewable assembled
+prompt.
 
 ## Backend — AWS, CDK (Python)
 
@@ -644,6 +701,75 @@ deliberately simple:
   model on Bedrock, since it isn't leaning on niche cookery reasoning
   the way suggestion generation is.
 
+## The structured-output contract
+
+Everything downstream of the LLM — ingredient merging, pack rounding,
+staple thresholds, portion rescaling, product matching — does
+arithmetic on recipe data. That only works if the model reliably
+returns a *typed object* rather than prose containing numbers. This is
+the interface between the model and the rest of the app, so it's
+specified rather than left to prompt wording.
+
+### Use constrained generation, not "please reply in JSON"
+
+Recipes are requested via Bedrock's **tool-use / structured-output
+mode**, with `Recipe` defined as the tool schema. The model emits
+arguments conforming to that schema, which is a far stronger guarantee
+than asking for JSON in the prompt text and hoping. Asking in prose
+fails in ways that are individually rare and collectively constant:
+markdown fences round the JSON, a "Here's your recipe!" preamble,
+trailing commentary, or truncation mid-object at the token limit.
+
+### Validate on-device anyway, and retry once
+
+Constrained generation makes malformed output unlikely, not
+impossible. So the app validates the parsed object against the schema
+locally, and on failure retries **once**, feeding the validation error
+back into the request. A second failure surfaces the actual error to
+the owner rather than a generic apology (see "Error handling").
+
+### Quantities are nullable, because cooking is fuzzy
+
+The tempting schema — `quantity: number, unit: enum`, both required —
+forces the model to either lie or fail whenever a recipe genuinely
+means "salt to taste", "a splash of oil", or "2–3 cloves of garlic".
+
+Instead:
+
+```
+ingredient: {
+  name:     string        # "beef mince, 12% fat"
+  quantity: number | null
+  unit:     enum | null   # g, kg, ml, l, tsp, tbsp, item
+  note:     string | null # "to taste", "or more if you like heat"
+}
+```
+
+Ingredients without a quantity **skip merging and rounding entirely**
+and are passed through to the recipe display as written. This turns
+out to cost nothing: the ingredients that resist quantification are
+overwhelmingly the ones already on the pantry-staples list — salt,
+pepper, oil, dried herbs — so they were never going to be ordered
+anyway. The two designs fit together without either being bent to
+accommodate the other.
+
+### Units come from a fixed enum
+
+`grams` one call and `g` the next makes merging fail silently, which
+is the worst kind of failure here — you'd get two lines of mince in
+the basket rather than an error. So units are a closed set (`g`, `kg`,
+`ml`, `l`, `tsp`, `tbsp`, `item`) that the model must map into, and
+the schema enforces it. Metric and UK-shopping-shaped: grams, not
+cups.
+
+### The same contract covers photo-to-recipe
+
+Photo extraction returns the identical `Recipe` schema, so a
+photographed recipe card flows into merging and scaling exactly like a
+generated one. It's more likely to produce null quantities (recipe
+cards say "a knob of butter"), which the nullable design already
+handles.
+
 ## Portions and recipe scaling
 
 Portion count is set per week (defaulting from settings) and
@@ -805,6 +931,30 @@ Exclusion happens **before** retailer matching, so staples never reach
 the price comparison and can't skew it; the comparison stays
 like-for-like across retailers automatically.
 
+## Editing recipes
+
+Any `Recipe` is editable — LLM-generated, photo-derived or manual.
+The model gets quantities wrong sometimes, recipe cards get misread,
+and a dish improves once you've cooked it. Editing is in place: one
+user, nothing shared, so there's no reason to fork a copy.
+
+Three consequences worth handling rather than discovering:
+
+- **Edits invalidate the cached rescaled variants.** Those were
+  derived from the previous text (see "Portions and recipe scaling"),
+  so they're dropped on edit and regenerated on next use.
+- **An edited recipe is marked as such**, so `source` stays honest —
+  "llm-suggested, edited by you" rather than silently still claiming
+  to be what the model produced.
+- **Deletion has to respect history.** A recipe referenced by a past
+  plan or order can't simply vanish, or the history becomes
+  incoherent. Deleting removes it from suggestions, favourites and
+  browsing, but past weeks keep rendering what was actually cooked.
+
+Editing also serves as the manual escape hatch for the structured
+output contract: if a quantity comes back nonsense and the retry
+doesn't fix it, fixing it by hand takes seconds.
+
 ## Data model (sketch)
 
 **This is the on-device SQLite schema, and the only copy that
@@ -818,7 +968,9 @@ so everything below is implicitly "mine" (see `decisions.md`).
   accumulates. Seeds each
   new `WeeklyPlan`; edited on the settings screen.
 - `Recipe` — id, title, `serves` (the portion count these quantities
-  are written for), ingredients[with qty+unit], method, approximate
+  are written for), ingredients (name, nullable quantity, nullable
+  unit from a fixed enum, optional note — see "The structured-output
+  contract"), method, an edited-by-user flag, approximate
   per-portion nutrition (kcal + macros, LLM-estimated, informational),
   source
   (llm-suggested / photo-recipe-card / photo-food-reconstruction /

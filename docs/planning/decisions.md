@@ -586,3 +586,70 @@ in the credential path, so it gets no exemption.
 more legible than an action's inputs — what it does is visible in the
 repo rather than behind a mutable version tag — and by pinning the
 Flutter version explicitly, which stops builds changing underfoot.
+
+## 2026-08-12 — Structured output: constrained generation, nullable quantities
+
+**Decided:** recipes are requested via Bedrock's tool-use /
+structured-output mode with `Recipe` as the tool schema, not by asking
+for JSON in the prompt text. The app validates the parsed object
+on-device and retries **once** with the validation error fed back;
+a second failure surfaces the real error. Ingredient `quantity` and
+`unit` are **nullable**, with a free-text `note`, and units come from
+a fixed enum (`g, kg, ml, l, tsp, tbsp, item`). See
+`architecture.md`, "The structured-output contract".
+
+**Why:** this is the interface between the model and everything that
+does arithmetic downstream — merging, rounding, staple thresholds,
+rescaling, product matching. Asking for JSON in prose fails in ways
+that are individually rare and collectively constant (markdown fences,
+preambles, truncation), and some failures are silent rather than loud:
+`grams` one call and `g` the next doesn't error, it just quietly
+produces two lines of mince in the basket.
+
+**Why nullable quantities:** requiring a number forces the model to
+lie or fail whenever a recipe genuinely means "salt to taste" or "2–3
+cloves". Making them nullable costs nothing downstream, because the
+ingredients that resist quantification are overwhelmingly the ones
+already on the pantry-staples list — they were never going to be
+ordered. The two designs fit together without either being bent.
+
+## 2026-08-12 — Export via the system file picker, not the Drive API
+
+**Decided:** the deliberate backup layer is an export/import through
+Android's Storage Access Framework — the standard system file sheet —
+rather than a Google Drive integration. Optionally includes photos.
+A staleness nudge appears in settings.
+
+**Why:** the owner asked for Drive backup, and SAF delivers it without
+Gusteau integrating with Drive at all: the system picker already lists
+Drive as a destination. No OAuth, no Google Cloud project, no Drive
+SDK, no third-party dependency — consistent with the supply-chain
+stance taken for CI. It also isn't locked to Drive, so the export can
+go somewhere that isn't the same Google account Auto Backup depends
+on, which is precisely the failure case this layer exists to cover.
+Including photos closes the one real gap in Auto Backup, which has to
+exclude them for quota reasons.
+
+## 2026-08-12 — Errors are blunt; testing avoids the LLM
+
+**Decided:** error messages state exactly what failed, with the
+underlying status or exception visible and copyable, and distinguish
+transient from terminal. Specific named cases: no connectivity, the
+monthly spend cap, malformed model output after retry, expired
+Sainsbury's session, and the Sainsbury's integration breaking. See
+`architecture.md`, "Error handling".
+
+**Testing:** never call a live LLM in CI. Test the deterministic core
+hard (merging, unit conversion, rounding, staple thresholds, prompt
+assembly, cooldown filtering), test recipe parsing against recorded
+fixtures including malformed ones, test migrations against per-version
+fixture databases, and snapshot-test `cdk synth`. Keep the iteration-1
+spike as a manual eval harness for prompt changes. See `ci-cd.md`,
+"Testing strategy".
+
+**Why:** one user who is also the developer, so vague errors help
+nobody — and a spend-cap 429 is a guard we deliberately added, so it
+will fire and should say so plainly. On testing: the model's output
+quality isn't something CI can meaningfully assert, and trying makes
+builds flaky and costly. The bugs that actually matter live in the
+arithmetic around the model, which is fully deterministic.
