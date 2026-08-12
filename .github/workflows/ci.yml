@@ -1,0 +1,177 @@
+name: CI
+
+# PRs get lint/test/synth with zero secrets and zero AWS access — see
+# docs/planning/ci-cd.md. Only pushes to main additionally build a
+# signed APK, since that step needs the signing secrets.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Default to no permissions; each job opts in to what it actually needs.
+permissions:
+  contents: read
+
+env:
+  # Pinned everywhere rather than left floating — see ci-cd.md, "Supply-
+  # chain policy". Bump these deliberately, not by surprise.
+  PYTHON_VERSION: "3.13"
+  CDK_CLI_VERSION: "2.1136.0"
+  FLUTTER_VERSION: "3.47.0"
+  FLUTTER_SHA256: "26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296"
+  JAVA_VERSION: "17"
+
+jobs:
+  infra:
+    name: infra (lint, test, synth)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: infra/requirements-dev.txt
+
+      - name: Install Python dependencies
+        working-directory: infra
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint
+        working-directory: infra
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Test
+        working-directory: infra
+        run: pytest -q
+
+      - name: Install CDK CLI
+        # Not aws-actions/* — see "Supply-chain policy" above. This is
+        # a plain npm install; Node.js is preinstalled on GitHub-hosted
+        # runners, so no setup-node step is needed either.
+        run: npm install -g "aws-cdk@${{ env.CDK_CLI_VERSION }}"
+
+      - name: cdk synth
+        working-directory: infra
+        # No AWS_DEFAULT_ACCOUNT/REGION set here deliberately — synth
+        # doesn't need real AWS access, and this job never gets any
+        # (no id-token permission, no credentials of any kind).
+        run: cdk synth --quiet
+
+  app:
+    name: app (analyze, test, build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Cache Flutter SDK
+        id: flutter-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ runner.temp }}/flutter
+          key: flutter-${{ runner.os }}-${{ env.FLUTTER_VERSION }}
+
+      - name: Install Flutter SDK
+        if: steps.flutter-cache.outputs.cache-hit != 'true'
+        # Hand-rolled rather than subosito/flutter-action — see
+        # ci-cd.md, "Supply-chain policy". Pinning the exact version
+        # and verifying its checksum is a feature here, not overhead:
+        # builds don't change underfoot.
+        run: |
+          curl -sSfL -o "${{ runner.temp }}/flutter.tar.xz" \
+            "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz"
+          echo "${{ env.FLUTTER_SHA256 }}  ${{ runner.temp }}/flutter.tar.xz" | sha256sum -c -
+          tar xf "${{ runner.temp }}/flutter.tar.xz" -C "${{ runner.temp }}"
+
+      - name: Add Flutter to PATH
+        run: echo "${{ runner.temp }}/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Disable Flutter/Dart analytics
+        run: |
+          flutter config --no-analytics
+          dart --disable-analytics
+
+      - name: Cache pub packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Install app dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: app
+        run: flutter analyze
+
+      - name: Format check
+        working-directory: app
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Test
+        working-directory: app
+        run: flutter test
+
+      - name: Set up JDK (for the Android build)
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # PRs: prove the app compiles for Android, nothing more. No
+      # signing secrets are available to a PR build (see permissions
+      # above and ci-cd.md), so this can only ever produce a debug APK
+      # — which is fine, since it's not published.
+      - name: Build debug APK (compile check only)
+        if: github.event_name == 'pull_request'
+        working-directory: app
+        run: flutter build apk --debug
+
+      # main only: a real, signed build the owner can actually install
+      # and react to — see decisions.md, "UX is designed by building,
+      # not by specifying".
+      - name: Write Android release signing config
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/gusteau-release.jks
+          cat > android/key.properties <<KEYPROPS
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=app/gusteau-release.jks
+          KEYPROPS
+
+      - name: Build signed release APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: app
+        run: flutter build apk --release
+
+      - name: Upload signed APK
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gusteau-${{ github.sha }}
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+          if-no-files-found: error

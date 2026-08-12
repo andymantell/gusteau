@@ -1,0 +1,127 @@
+name: Deploy infra
+
+# Push-to-main is the normal trigger; workflow_dispatch lets it be
+# re-run by hand from the GitHub mobile app without a new commit.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # Required to request the OIDC token exchanged for AWS credentials —
+  # see docs/planning/ci-cd.md, "Authentication: OIDC, no stored AWS
+  # credentials". No other workflow in this repo has this permission.
+  id-token: write
+
+# Two deploys racing each other (e.g. a fast follow-up push, or a
+# manual re-run while a scheduled one is still going) is exactly the
+# kind of thing that's easy to trigger by accident from a phone.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.13"
+  CDK_CLI_VERSION: "2.1136.0"
+
+jobs:
+  deploy:
+    name: cdk deploy
+    runs-on: ubuntu-latest
+    # Binds this run's OIDC token to a GitHub Environment, matching the
+    # `sub` condition in infra/github-oidc.yaml's trust policy. A
+    # required reviewer on this environment turns every deploy into an
+    # approval prompt the owner can act on from the GitHub mobile app
+    # — see ci-cd.md, "Approval from a phone".
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: infra/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: infra
+        run: pip install -r requirements.txt
+
+      - name: Install CDK CLI
+        run: npm install -g "aws-cdk@${{ env.CDK_CLI_VERSION }}"
+
+      # Hand-rolled rather than aws-actions/configure-aws-credentials —
+      # see ci-cd.md, "Supply-chain policy". This is the step that
+      # matters most for that rule: a third-party action here would sit
+      # directly between the OIDC token and the AWS account.
+      - name: Assume the deploy role via OIDC
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AWS_DEPLOY_ROLE_ARN:-}" ]; then
+            echo "::error::AWS_DEPLOY_ROLE_ARN repository variable is not set." \
+                 "Deploy infra/github-oidc.yaml from CloudShell first and paste" \
+                 "its DeployRoleArn output here — see docs/planning/ci-cd.md."
+            exit 1
+          fi
+
+          token=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            | jq -r '.value')
+
+          creds=$(aws sts assume-role-with-web-identity \
+            --role-arn "$AWS_DEPLOY_ROLE_ARN" \
+            --role-session-name "gha-${GITHUB_RUN_ID}" \
+            --web-identity-token "$token" \
+            --duration-seconds 3600 \
+            --query Credentials --output json)
+
+          # Masked before export: this is a public repo, and build logs
+          # are world-readable.
+          for k in AccessKeyId SecretAccessKey SessionToken; do
+            v=$(echo "$creds" | jq -r ".$k")
+            echo "::add-mask::$v"
+          done
+
+          {
+            echo "AWS_ACCESS_KEY_ID=$(echo "$creds" | jq -r .AccessKeyId)"
+            echo "AWS_SECRET_ACCESS_KEY=$(echo "$creds" | jq -r .SecretAccessKey)"
+            echo "AWS_SESSION_TOKEN=$(echo "$creds" | jq -r .SessionToken)"
+            echo "CDK_DEFAULT_REGION=${AWS_REGION:-eu-west-2}"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve the deploying account ID
+        run: |
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          echo "CDK_DEFAULT_ACCOUNT=$account_id" >> "$GITHUB_ENV"
+
+      - name: cdk diff (informational)
+        working-directory: infra
+        env:
+          GUSTEAU_BUDGET_ALERT_EMAIL: ${{ secrets.GUSTEAU_BUDGET_ALERT_EMAIL }}
+        # Never blocks the deploy — this is purely so the change is
+        # visible in the log before it happens. A non-existent stack
+        # (first-ever deploy) makes `cdk diff` exit non-zero, which is
+        # expected, not a failure.
+        continue-on-error: true
+        run: cdk diff
+
+      - name: cdk deploy
+        working-directory: infra
+        env:
+          GUSTEAU_BUDGET_ALERT_EMAIL: ${{ secrets.GUSTEAU_BUDGET_ALERT_EMAIL }}
+        run: cdk deploy --require-approval never --outputs-file cdk-outputs.json
+
+      - name: Show stack outputs
+        working-directory: infra
+        run: cat cdk-outputs.json

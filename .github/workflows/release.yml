@@ -1,0 +1,127 @@
+name: Release APK
+
+# A v* tag is the normal trigger; workflow_dispatch allows a manual
+# re-run (e.g. re-publishing the same tag after fixing a secret).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write # to publish a GitHub Release with gh release create
+
+env:
+  FLUTTER_VERSION: "3.47.0"
+  FLUTTER_SHA256: "26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296"
+  JAVA_VERSION: "17"
+
+jobs:
+  release:
+    name: Build, sign and publish the release APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Derive version name/code from the tag
+        id: version
+        run: |
+          ref="${GITHUB_REF#refs/tags/v}"
+          echo "name=$ref" >> "$GITHUB_OUTPUT"
+          # A semver tag alone isn't a single monotonically-increasing
+          # integer, which Android's versionCode has to be for an
+          # install to be accepted as an upgrade rather than a
+          # downgrade. The workflow's own run number always increases,
+          # so it's a simple, reliable stand-in.
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Flutter SDK
+        id: flutter-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ runner.temp }}/flutter
+          key: flutter-${{ runner.os }}-${{ env.FLUTTER_VERSION }}
+
+      - name: Install Flutter SDK
+        if: steps.flutter-cache.outputs.cache-hit != 'true'
+        # Hand-rolled — see docs/planning/ci-cd.md, "Supply-chain policy".
+        run: |
+          curl -sSfL -o "${{ runner.temp }}/flutter.tar.xz" \
+            "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${{ env.FLUTTER_VERSION }}-stable.tar.xz"
+          echo "${{ env.FLUTTER_SHA256 }}  ${{ runner.temp }}/flutter.tar.xz" | sha256sum -c -
+          tar xf "${{ runner.temp }}/flutter.tar.xz" -C "${{ runner.temp }}"
+
+      - name: Add Flutter to PATH
+        run: echo "${{ runner.temp }}/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Disable Flutter/Dart analytics
+        run: |
+          flutter config --no-analytics
+          dart --disable-analytics
+
+      - name: Cache pub packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('app/pubspec.lock') }}
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Set up JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Install app dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Write Android release signing config
+        working-directory: app
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/gusteau-release.jks
+          cat > android/key.properties <<KEYPROPS
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=app/gusteau-release.jks
+          KEYPROPS
+
+      - name: Build signed release APK
+        working-directory: app
+        run: |
+          flutter build apk --release \
+            --build-name="${{ steps.version.outputs.name }}" \
+            --build-number="${{ steps.version.outputs.code }}"
+
+      - name: Rename APK for the release asset
+        working-directory: app
+        run: |
+          mkdir -p ../dist
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "../dist/gusteau-${{ steps.version.outputs.name }}.apk"
+
+      # gh is preinstalled on GitHub-hosted runners and authenticates
+      # with the run's own token automatically — no PAT, no third-party
+      # action. See ci-cd.md, "Supply-chain policy".
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF#refs/tags/}" \
+            "dist/gusteau-${{ steps.version.outputs.name }}.apk" \
+            --title "Gusteau ${{ steps.version.outputs.name }}" \
+            --generate-notes
