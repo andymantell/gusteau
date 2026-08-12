@@ -179,6 +179,5 @@ weekly. Known candidates, roughly in the order they seem worth doing:
 - **Fully automated checkout** for a specific retailer, if ever wanted
   — separately scoped, with its own security review (`decisions.md`).
 - From the "not yet specified" list in `requirements.md`: nutrition
-  and dietary constraints, portion counts, meal-repeat rules,
-  notifications, budget alerts, delivery-slot-disappears handling,
-  iOS.
+  tracking, meal-repeat rules, notifications, budget alerts, and
+  delivery-slot-disappears handling.

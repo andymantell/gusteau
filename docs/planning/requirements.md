@@ -8,7 +8,8 @@ scope for MVP versus later is expressed by the build order in
 
 ## Platform / stack (given, not negotiable)
 
-- Client is a **Flutter** app, **Android** only for now.
+- Client is a **Flutter** app, **Android only** — iOS is out of scope,
+  permanently, so Android-only choices are fair game.
 - **Local-first:** the device is the system of record. Storage and
   computation happen on the phone; AWS is used only for capabilities
   the device genuinely can't provide — in practice, LLM inference.
@@ -233,4 +234,7 @@ after, once the core concept is stable. See `decisions.md`.
 - Notifications (e.g. "your basket is ready to review", "slot booked").
 - What happens if a chosen delivery slot disappears mid-checkout.
 - Budget cap / spend alerts.
-- iOS, at some point ("Android app" only for now).
+
+**Android only. iOS is out of scope** — not "later", not a
+consideration. Where a choice is cheaper or better if it need only
+work on Android, take it.
