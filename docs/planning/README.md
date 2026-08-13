@@ -76,16 +76,12 @@ to every step, or the CDK CLI's own AWS SDK calls silently defaulted to
 
 1. ~~From AWS CloudShell: deploy `infra/github-oidc.yaml`~~ — **done**,
    deployed by hand via the CloudFormation console instead (CloudShell
-   wasn't accepting the owner in). Generating the **Android signing
-   keystore in CloudShell** is still outstanding — CI runs on a
-   temporary checked-in keystore for now (see `decisions.md`,
-   2026-08-13); do this before real data is on the device.
+   wasn't accepting the owner in).
 2. ~~In the GitHub repo settings: create a `production` Environment...
    set the variables/secrets~~ — **done**, confirmed working (the
    deploy above went through the approval gate and read
    `AWS_DEPLOY_ROLE_ARN`/`AWS_REGION`/`GUSTEAU_BUDGET_ALERT_EMAIL`
-   correctly). The four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*` secrets
-   are still outstanding, tied to step 1 above.
+   correctly).
 3. ~~Push to `main` to trigger the first `deploy.yml` run~~ — **done**.
    Still to do: fetch the real API key value from the AWS console
    (API Gateway → API Keys → `nzuexor6yb` → Show — the stack only
@@ -97,14 +93,17 @@ to every step, or the CDK CLI's own AWS SDK calls silently defaulted to
    `{"status":"ok","service":"gusteau-inference-proxy",...}`. Phone →
    API Gateway → Lambda is live end to end, on today's temporary
    signing key.
-5. Run the install-and-restore test on a real device — iteration 0's
-   one requirement that genuinely can't be done in CI.
-6. Once CloudShell is reachable again: generate the real keystore,
-   set the four Android secrets, delete
-   `android/app/sideload.keystore.jks`, and push — **before real data
-   is on the device**, since this swap is itself a signing-identity
-   change that would otherwise force a data-losing reinstall. See
-   `ci-cd.md`, "Android signing".
+5. **Next up:** run the install-and-restore test on a real device —
+   iteration 0's one requirement that genuinely can't be done in CI.
+
+**Deferred, lowest priority — not being done right now:** once
+CloudShell is reachable again, generate the real Android signing
+keystore there, set the four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*`
+secrets, delete `android/app/sideload.keystore.jks`, and push. Do this
+**before real data accumulates on the device**, since the swap is
+itself a signing-identity change that would otherwise force a
+data-losing reinstall — but there's nothing on the device worth losing
+yet, so it can wait. See `ci-cd.md`, "Android signing".
 
 Iteration 1 (real Bedrock suggestions, replacing the `/health` stub)
 starts once the above is confirmed working.
