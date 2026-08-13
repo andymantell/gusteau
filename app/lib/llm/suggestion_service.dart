@@ -35,8 +35,10 @@ class GenerationFailure extends GenerationResult {
 /// week gets filled" — so building a week's initial suggestions and
 /// refreshing one slot later both go through [generateForSlot].
 class SuggestionService {
+  // The public parameter is `db`, not `_db` — an initializing formal
+  // would force the external API to use the private field name.
   SuggestionService({required AppDatabase db, ProxyClient? proxyClient})
-    : _db = db,
+    : _db = db, // ignore: prefer_initializing_formals
       _proxyClient = proxyClient ?? ProxyClient();
 
   final AppDatabase _db;
