@@ -312,6 +312,16 @@ only in GitHub secrets, which are write-only and cannot be read back.
 | `ANDROID_KEYSTORE_PASSWORD` | |
 | `ANDROID_KEY_ALIAS` | |
 | `ANDROID_KEY_PASSWORD` | |
+| `GUSTEAU_BUDGET_ALERT_EMAIL` | Where the AWS Budget alert emails go (optional — the stack synths without it) |
+
+All of the above are **repository-scoped**, not Environment-scoped:
+`deploy.yml`'s job is the only one bound to the `production` Environment
+(that binding is what the required-reviewer approval and the OIDC trust
+policy's `sub` condition need), but the Android secrets are also read by
+`ci.yml` and `release.yml`, neither of which binds to that Environment.
+Environment-scoped secrets are invisible to jobs that don't declare
+`environment: production`, so setting them there instead of at the
+repository level would silently break those two workflows.
 
 Notably **no AWS credentials** in that list.
 

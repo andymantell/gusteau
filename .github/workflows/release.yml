@@ -91,7 +91,25 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        # See ci.yml's identical check: fails loudly up front rather than
+        # letting Gradle report an empty keystore as an opaque
+        # KeytoolException minutes into the build.
         run: |
+          set -euo pipefail
+
+          missing=()
+          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!var:-}" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Android signing secrets not set: ${missing[*]}." \
+                 "Generate the keystore from CloudShell and add these as" \
+                 "repository secrets first — see docs/planning/ci-cd.md."
+            exit 1
+          fi
+
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/gusteau-release.jks
           cat > android/key.properties <<KEYPROPS
           storePassword=$ANDROID_KEYSTORE_PASSWORD
