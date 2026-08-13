@@ -97,6 +97,17 @@ jobs:
             echo "AWS_ACCESS_KEY_ID=$(echo "$creds" | jq -r .AccessKeyId)"
             echo "AWS_SECRET_ACCESS_KEY=$(echo "$creds" | jq -r .SecretAccessKey)"
             echo "AWS_SESSION_TOKEN=$(echo "$creds" | jq -r .SessionToken)"
+            # AWS_REGION (not just CDK_DEFAULT_REGION) has to survive into
+            # later steps: the CDK CLI's own AWS SDK calls (bootstrap
+            # version check, lookup-role assumption) read AWS_REGION, not
+            # CDK_DEFAULT_REGION — that one is app-facing only, and the
+            # CLI actually overwrites it from its own resolved region
+            # before invoking the app. Leaving AWS_REGION unset here meant
+            # the SDK fell back to us-east-1, dragging the whole deploy
+            # there with it. This step's own `env:` block above only
+            # scopes AWS_REGION to itself, so it must be re-exported here
+            # to reach cdk diff/deploy.
+            echo "AWS_REGION=${AWS_REGION:-eu-west-2}"
             echo "CDK_DEFAULT_REGION=${AWS_REGION:-eu-west-2}"
           } >> "$GITHUB_ENV"
 
