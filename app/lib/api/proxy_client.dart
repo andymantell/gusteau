@@ -42,6 +42,38 @@ class ProxyHealthNetworkError extends ProxyHealthResult {
   final Object error;
 }
 
+/// Result of a call to `/generate` — mirrors [ProxyHealthResult] for
+/// the same reason: the real failure, not a translated one.
+sealed class ProxyGenerateResult {}
+
+class ProxyGenerateSuccess extends ProxyGenerateResult {
+  ProxyGenerateSuccess({required this.body});
+
+  /// The decoded Bedrock Converse response, unmodified.
+  final Map<String, dynamic> body;
+}
+
+class ProxyGenerateNotConfigured extends ProxyGenerateResult {}
+
+/// Covers both "the proxy rejected the request" and "Bedrock returned
+/// an error the Lambda relayed" — see the Lambda's error-code mapping
+/// in gusteau_infra/lambda/inference_proxy/handler.py. Either way,
+/// [statusCode]/[body] are Bedrock's or the proxy's own words, not a
+/// paraphrase. See architecture.md, "Error handling": "Bedrock
+/// returned 400: model x not enabled in eu-west-2".
+class ProxyGenerateHttpError extends ProxyGenerateResult {
+  ProxyGenerateHttpError({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
+}
+
+class ProxyGenerateNetworkError extends ProxyGenerateResult {
+  ProxyGenerateNetworkError(this.error);
+
+  final Object error;
+}
+
 /// Talks to Gusteau's one AWS endpoint — the inference proxy in front of
 /// Bedrock. Iteration 0 only proves the round trip via `/health`; real
 /// generation calls land here in iteration 1 once the model-tier spike
@@ -92,5 +124,52 @@ class ProxyClient {
     }
 
     return ProxyHealthSuccess(statusCode: response.statusCode, body: decoded);
+  }
+
+  /// Posts an already-assembled Bedrock Converse request body (see
+  /// lib/llm/prompt_assembly.dart) to `/generate` and returns the raw
+  /// response. Does not parse or validate the recipe itself — that's
+  /// [ParsedRecipe]'s job, one layer up.
+  Future<ProxyGenerateResult> generate(Map<String, dynamic> requestBody) async {
+    final baseUrl = await _credentials.readBaseUrl();
+    final apiKey = await _credentials.readApiKey();
+    if (baseUrl == null ||
+        baseUrl.isEmpty ||
+        apiKey == null ||
+        apiKey.isEmpty) {
+      return ProxyGenerateNotConfigured();
+    }
+
+    final http.Response response;
+    try {
+      response = await _httpClient
+          .post(
+            Uri.parse('$baseUrl/generate'),
+            headers: {'x-api-key': apiKey, 'Content-Type': 'application/json'},
+            body: jsonEncode(requestBody),
+          )
+          // Just under API Gateway's 29s integration cap (see
+          // proxy_stack.py) so a real timeout is visible as ours, not
+          // silently indistinguishable from Gateway's own cutoff.
+          .timeout(const Duration(seconds: 28));
+    } catch (e) {
+      return ProxyGenerateNetworkError(e);
+    }
+
+    if (response.statusCode != 200) {
+      return ProxyGenerateHttpError(
+        statusCode: response.statusCode,
+        body: response.body,
+      );
+    }
+
+    final Map<String, dynamic> decoded;
+    try {
+      decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (e) {
+      return ProxyGenerateHttpError(statusCode: 200, body: response.body);
+    }
+
+    return ProxyGenerateSuccess(body: decoded);
   }
 }

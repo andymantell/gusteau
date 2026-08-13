@@ -106,4 +106,100 @@ void main() {
     expect(result, isA<ProxyHealthHttpError>());
     expect((result as ProxyHealthHttpError).body, 'not json');
   });
+
+  group('generate', () {
+    test('not configured: no request is made at all', () async {
+      var called = false;
+      final client = ProxyClient(
+        httpClient: MockClient((request) async {
+          called = true;
+          return http.Response('{}', 200);
+        }),
+      );
+
+      final result = await client.generate({'messages': []});
+
+      expect(result, isA<ProxyGenerateNotConfigured>());
+      expect(called, isFalse);
+    });
+
+    test(
+      'posts the request body as JSON to /generate with the API key',
+      () async {
+        final creds = ProxyCredentials();
+        await creds.save(baseUrl: 'https://example.com/prod', apiKey: 'my-key');
+
+        Uri? requestedUri;
+        String? apiKeyHeader;
+        String? contentTypeHeader;
+        String? sentBody;
+        final client = ProxyClient(
+          credentials: creds,
+          httpClient: MockClient((request) async {
+            requestedUri = request.url;
+            apiKeyHeader = request.headers['x-api-key'];
+            contentTypeHeader = request.headers['Content-Type'];
+            sentBody = request.body;
+            return http.Response('{"stopReason":"tool_use"}', 200);
+          }),
+        );
+
+        final result = await client.generate({
+          'messages': [
+            {'role': 'user'},
+          ],
+        });
+
+        expect(result, isA<ProxyGenerateSuccess>());
+        expect((result as ProxyGenerateSuccess).body, {
+          'stopReason': 'tool_use',
+        });
+        expect(requestedUri, Uri.parse('https://example.com/prod/generate'));
+        expect(apiKeyHeader, 'my-key');
+        expect(contentTypeHeader, 'application/json');
+        expect(sentBody, contains('"role":"user"'));
+      },
+    );
+
+    test('non-200 response: the real status and body are surfaced', () async {
+      final creds = ProxyCredentials();
+      await creds.save(baseUrl: 'https://example.com/prod', apiKey: 'k');
+
+      final client = ProxyClient(
+        credentials: creds,
+        httpClient: MockClient(
+          (request) async => http.Response(
+            '{"error":"Bedrock AccessDeniedException: model not enabled"}',
+            403,
+          ),
+        ),
+      );
+
+      final result = await client.generate({'messages': []});
+
+      expect(result, isA<ProxyGenerateHttpError>());
+      result as ProxyGenerateHttpError;
+      expect(result.statusCode, 403);
+      expect(result.body, contains('AccessDeniedException'));
+    });
+
+    test(
+      'network failure: the real exception is surfaced, not swallowed',
+      () async {
+        final creds = ProxyCredentials();
+        await creds.save(baseUrl: 'https://example.com/prod', apiKey: 'k');
+
+        final thrown = Exception('Connection timed out');
+        final client = ProxyClient(
+          credentials: creds,
+          httpClient: MockClient((request) async => throw thrown),
+        );
+
+        final result = await client.generate({'messages': []});
+
+        expect(result, isA<ProxyGenerateNetworkError>());
+        expect((result as ProxyGenerateNetworkError).error, thrown);
+      },
+    );
+  });
 }
