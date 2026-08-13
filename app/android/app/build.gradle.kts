@@ -24,7 +24,10 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.gusteau.gusteau"
-    compileSdk = flutter.compileSdkVersion
+    // Overrides Flutter's own default (36): flutter_secure_storage 11.x
+    // requires compiling against 37 or later, checked by AGP's AAR
+    // metadata task at build time.
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
