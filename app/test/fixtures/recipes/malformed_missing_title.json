@@ -1,0 +1,7 @@
+{
+  "serves": 4,
+  "method": "Do the thing.",
+  "ingredients": [
+    { "name": "an ingredient" }
+  ]
+}

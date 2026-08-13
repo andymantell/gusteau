@@ -1,0 +1,16 @@
+{
+  "title": "Buttered toast",
+  "serves": 1,
+  "method": "Toast the bread. Butter it.",
+  "ingredients": [
+    {
+      "name": "bread",
+      "quantity": 2,
+      "unit": "item"
+    },
+    {
+      "name": "butter",
+      "note": "to taste"
+    }
+  ]
+}

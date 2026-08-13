@@ -1,0 +1,8 @@
+{
+  "title": "Something",
+  "serves": 4,
+  "method": "Do the thing.",
+  "ingredients": [
+    { "name": "beef mince, 12% fat", "quantity": 500, "unit": "grams" }
+  ]
+}

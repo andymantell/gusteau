@@ -1,0 +1,39 @@
+{
+  "title": "Chicken thigh traybake with fennel and lemon",
+  "serves": 4,
+  "method": "Heat oven to 200C fan. Toss chicken thighs, fennel wedges and lemon slices with olive oil, salt and pepper on a large tray. Roast 35-40 minutes until the chicken skin is crisp and the juices run clear. Rest 5 minutes before serving.",
+  "cuisine": "British",
+  "time_minutes": 45,
+  "difficulty": "easy",
+  "primary_protein": "chicken",
+  "cooking_method": "roasting",
+  "kcal_per_portion": 520,
+  "protein_g_per_portion": 38.5,
+  "fat_g_per_portion": 32.0,
+  "carbs_g_per_portion": 12.0,
+  "ingredients": [
+    {
+      "name": "chicken thighs, bone-in, skin-on",
+      "quantity": 8,
+      "unit": "item"
+    },
+    {
+      "name": "fennel bulbs",
+      "quantity": 2,
+      "unit": "item"
+    },
+    {
+      "name": "lemon",
+      "quantity": 1,
+      "unit": "item"
+    },
+    {
+      "name": "olive oil",
+      "note": "a generous glug"
+    },
+    {
+      "name": "salt",
+      "note": "to taste"
+    }
+  ]
+}
