@@ -827,3 +827,27 @@ the wrong region explicitly. After the fix, the next run's step-env
 dump showed both `AWS_REGION: eu-west-2` and `CDK_DEFAULT_REGION:
 eu-west-2`, and the deploy succeeded — `GusteauProxyStack` created in
 `eu-west-2` as intended, all 19 resources, ~47s.
+
+## 2026-08-13 — Install-and-restore backup test resequenced, not dropped
+
+**Decided:** defer the actual install-and-restore test (planned as
+part of iteration 0 — see the "Android Auto Backup is the durability
+answer" decision above) until there's real user data to test with,
+rather than running it now against an empty database.
+
+**Why:** the app currently has no user-editable data — only the
+connection screen, whose credentials live in Android Keystore and are
+correctly *excluded* from Auto Backup by design. Run the test today
+and the only thing it can confirm is "the app didn't crash on
+restore," not "real data survived a real backup," which is the actual
+property this test exists to prove. Iteration 1+ gives the database
+something worth losing (planned meals, preferences); the test is more
+useful once there's something specific to check for.
+
+**Not a scope cut:** this remains the one iteration-0 requirement that
+genuinely can't be done in CI, and it's still required before the app
+is trusted with real use — just resequenced to when it can actually
+test what it's meant to. Tracked in `README.md`'s status section
+alongside the (separately deferred, for a different reason) real
+signing-keystore swap — both share the same shape: safe to defer only
+because nothing real is on the device yet.

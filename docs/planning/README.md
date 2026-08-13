@@ -93,20 +93,33 @@ to every step, or the CDK CLI's own AWS SDK calls silently defaulted to
    `{"status":"ok","service":"gusteau-inference-proxy",...}`. Phone →
    API Gateway → Lambda is live end to end, on today's temporary
    signing key.
-5. **Next up:** run the install-and-restore test on a real device —
-   iteration 0's one requirement that genuinely can't be done in CI.
 
-**Deferred, lowest priority — not being done right now:** once
-CloudShell is reachable again, generate the real Android signing
-keystore there, set the four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*`
-secrets, delete `android/app/sideload.keystore.jks`, and push. Do this
-**before real data accumulates on the device**, since the swap is
-itself a signing-identity change that would otherwise force a
-data-losing reinstall — but there's nothing on the device worth losing
-yet, so it can wait. See `ci-cd.md`, "Android signing".
+**Deferred, in priority order — not being done right now:**
+
+1. **Install-and-restore backup test.** Pushed later deliberately: the
+   app has no user-editable data yet (only the connection screen,
+   whose credentials are Keystore-backed and correctly *excluded* from
+   Auto Backup), so testing now could only prove "didn't crash," not
+   "real data survived." More useful once iteration 1+ gives the
+   database something real to lose — meals planned, preferences set —
+   and the test can confirm that actually round-trips. Still iteration
+   0's one requirement that genuinely can't be done in CI, so it isn't
+   dropped, just resequenced. See `architecture.md`, "Backup and
+   durability".
+2. **Real Android signing keystore.** Once CloudShell is reachable
+   again: generate it there, set the four `ANDROID_KEYSTORE_*`/
+   `ANDROID_KEY_*` secrets, delete
+   `android/app/sideload.keystore.jks`, and push. Do this **before
+   real data accumulates on the device**, since the swap is itself a
+   signing-identity change that would otherwise force a data-losing
+   reinstall — but there's nothing on the device worth losing yet, so
+   it can wait. See `ci-cd.md`, "Android signing". (This and #1 pull
+   in the same direction — both are safe to defer only *because*
+   nothing real is on the device yet, and both stop being free the
+   moment that changes.)
 
 Iteration 1 (real Bedrock suggestions, replacing the `/health` stub)
-starts once the above is confirmed working.
+can start now — nothing above blocks it.
 
 ## Ground rules for this plan
 
