@@ -762,3 +762,35 @@ entirely on CloudShell access, which is an environmental problem
 (reported as not letting the owner in), not a design one. Shipping
 nothing until that clears would leave the whole pipeline red for no
 security benefit, since there is nothing sensitive on the device yet.
+
+## 2026-08-13 — OIDC immutable subject claims: `owner@id/repo@id`, not `owner/repo`
+
+**Decided:** `infra/github-oidc.yaml`'s trust policy condition uses
+GitHub's newer **immutable subject claim** format —
+`repo:andymantell@134642/gusteau@1331477953:environment:production` —
+instead of the classic name-only `repo:andymantell/gusteau:environment:production`
+the template originally generated. Two new parameters,
+`GitHubOwnerId` and `GitHubRepoId`, hold the numeric IDs (looked up via
+the GitHub API: `GET /users/andymantell` → `id`, `GET
+/repos/andymantell/gusteau` → `id`), defaulted for this repo.
+
+**Why this was necessary, not stylistic:** GitHub changed the default
+OIDC token `sub` claim on **2026-07-15**. Repos created before that
+date (or that haven't opted in) still get the classic
+`repo:OWNER/REPO:...` format; repos created after — `gusteau`
+included, created 2026-08-12 — get an immutable format embedding the
+numeric owner and repo IDs instead, specifically to stop a renamed or
+recycled repo/org name from inheriting another repo's trust. The
+manually-deployed `github-oidc.yaml` stack used the classic format,
+so every deploy attempt failed identically: `AccessDenied` /
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`, with
+nothing in the error naming the actual cause. Diagnosed by web search
+once the pattern (correct-looking config, opaque AWS denial) ruled out
+every plausible GitHub-Environment or parameter-typo explanation
+first.
+
+**Consequence for anyone reusing this template on a different repo:**
+`GitHubOwnerId`/`GitHubRepoId` must be looked up and set explicitly —
+they're not derivable from the org/repo name strings alone, and
+getting them wrong fails exactly the same way, with no error message
+pointing at why.

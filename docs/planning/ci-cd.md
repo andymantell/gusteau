@@ -156,13 +156,22 @@ Without a `sub` condition, *any* GitHub repo could assume the role.
 "Condition": {
   "StringEquals": {
     "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-    "token.actions.githubusercontent.com:sub": "repo:andymantell/gusteau:ref:refs/heads/main"
+    "token.actions.githubusercontent.com:sub": "repo:andymantell@134642/gusteau@1331477953:ref:refs/heads/main"
   }
 }
 ```
 
 Using a GitHub **Environment** instead (`...:environment:production`)
 is the better variant — see "Approval from a phone" below.
+
+**The `owner@id/repo@id` form, not plain `owner/repo`, matters here —
+see `decisions.md`, "OIDC immutable subject claims".** Repos created
+before GitHub's 2026-07-15 cutover (or that haven't opted in) still get
+the classic name-only `sub`; `gusteau` was created after, so it only
+ever gets the immutable-ID form, and a trust policy using the classic
+form is silently wrong — AWS rejects it with a plain "Not authorized to
+perform sts:AssumeRoleWithWebIdentity", no hint about the format
+mismatch.
 
 ## One-time manual setup (the chicken-and-egg bit)
 

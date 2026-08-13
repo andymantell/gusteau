@@ -15,10 +15,28 @@ Parameters:
     Type: String
     Default: andymantell
     Description: GitHub organisation or username that owns the repo.
+  GitHubOwnerId:
+    Type: String
+    Default: "134642"
+    Description: >
+      Numeric GitHub user/org ID for GitHubOrg. Required because this
+      repo was created after 2026-07-15, so GitHub issues OIDC tokens
+      in the newer immutable-subject format
+      (repo:OWNER@OWNER_ID/REPO@REPO_ID:...) rather than the classic
+      name-only one — see the trust policy condition below and
+      docs/planning/decisions.md, "OIDC immutable subject claims".
+      Look it up via the GitHub API (GET /users/{username}, the "id"
+      field) if this template is ever reused for a different repo.
   GitHubRepo:
     Type: String
     Default: gusteau
     Description: Repository name (without the owner prefix).
+  GitHubRepoId:
+    Type: String
+    Default: "1331477953"
+    Description: >
+      Numeric GitHub repository ID for GitHubRepo — see GitHubOwnerId
+      above. Look it up via GET /repos/{owner}/{repo}, the "id" field.
   GitHubEnvironment:
     Type: String
     Default: production
@@ -66,7 +84,13 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:environment:${GitHubEnvironment}"
+                # Immutable-subject format, not the classic
+                # repo:${GitHubOrg}/${GitHubRepo}:environment:${GitHubEnvironment}
+                # — this repo was created after GitHub's 2026-07-15
+                # cutover, so it only ever gets tokens in this format.
+                # See docs/planning/decisions.md, "OIDC immutable
+                # subject claims".
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}@${GitHubOwnerId}/${GitHubRepo}@${GitHubRepoId}:environment:${GitHubEnvironment}"
       Policies:
         - PolicyName: assume-cdk-bootstrap-roles
           PolicyDocument:
