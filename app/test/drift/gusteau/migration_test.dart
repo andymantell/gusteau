@@ -9,6 +9,7 @@ import 'generated/schema.dart';
 
 import 'generated/schema_v1.dart' as v1;
 import 'generated/schema_v2.dart' as v2;
+import 'generated/schema_v3.dart' as v3;
 
 void main() {
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -86,6 +87,44 @@ void main() {
           expectedNewSettingsData,
           await newDb.select(newDb.settings).get(),
         );
+      },
+    );
+  });
+
+  // v2->v3 only adds new tables (recipes, recipe_ingredients,
+  // weekly_plans, suggestions) — no column changes to existing ones.
+  // The generic "simple database migrations" loop above already proves
+  // the new tables' structural shape is correct for every version
+  // pair; what it doesn't prove is that existing Settings rows survive
+  // untouched, which is what this test is actually for (mirroring the
+  // v1->v2 test above).
+  test('migration from v2 to v3 preserves customised settings', () async {
+    final oldSettingsData = <v2.SettingsData>[
+      const v2.SettingsData(
+        id: 0,
+        defaultPortions: 2,
+        defaultMealsPerWeek: 7,
+        repeatCooldownWeeks: 4,
+        planningNudgeWeekday: null,
+        planningNudgeMinuteOfDay: null,
+        lastExportedAt: null,
+      ),
+    ];
+
+    await verifier.testWithDataIntegrity(
+      oldVersion: 2,
+      newVersion: 3,
+      createOld: v2.DatabaseAtV2.new,
+      createNew: v3.DatabaseAtV3.new,
+      openTestedDatabase: AppDatabase.new,
+      createItems: (batch, oldDb) {
+        batch.insertAll(oldDb.settings, oldSettingsData);
+      },
+      validateItems: (newDb) async {
+        final settings = await newDb.select(newDb.settings).get();
+        expect(settings, hasLength(1));
+        expect(settings.single.defaultPortions, 2);
+        expect(settings.single.defaultMealsPerWeek, 7);
       },
     );
   });

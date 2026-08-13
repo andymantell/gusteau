@@ -7,7 +7,11 @@ import 'package:path_provider/path_provider.dart';
 
 import 'database.steps.dart';
 import 'pre_migration_snapshot.dart';
+import 'tables/recipe_ingredients_table.dart';
+import 'tables/recipes_table.dart';
 import 'tables/settings_table.dart';
+import 'tables/suggestions_table.dart';
+import 'tables/weekly_plans_table.dart';
 
 part 'database.g.dart';
 
@@ -19,9 +23,11 @@ const String kDatabaseFileName = 'gusteau.sqlite';
 /// Single source of truth for the schema version, so the migration
 /// snapshot check (which needs it before the database is constructed)
 /// can never drift out of sync with [AppDatabase.schemaVersion].
-const int kSchemaVersion = 2;
+const int kSchemaVersion = 3;
 
-@DriftDatabase(tables: [Settings])
+@DriftDatabase(
+  tables: [Settings, Recipes, RecipeIngredients, WeeklyPlans, Suggestions],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(executor ?? _defaultExecutor());
@@ -34,7 +40,7 @@ class AppDatabase extends _$AppDatabase {
   // unit test in test/database_test.dart, rather than by reference, since
   // referencing it here breaks that tooling.
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -52,6 +58,12 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: stepByStep(
       from1To2: (m, schema) async {
         await m.addColumn(schema.settings, schema.settings.lastExportedAt);
+      },
+      from2To3: (m, schema) async {
+        await m.createTable(schema.recipes);
+        await m.createTable(schema.recipeIngredients);
+        await m.createTable(schema.weeklyPlans);
+        await m.createTable(schema.suggestions);
       },
     ),
   );
