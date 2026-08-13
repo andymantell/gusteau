@@ -91,10 +91,12 @@ to every step, or the CDK CLI's own AWS SDK calls silently defaulted to
    (API Gateway → API Keys → `nzuexor6yb` → Show — the stack only
    outputs the *ID*, deploy logs are public) and paste it, with the
    API URL above, into the app's connection screen once installed.
-4. Install the CI-built APK (a run artifact from `ci.yml` on `main`,
-   or a tagged `release.yml` build) and confirm the round trip to
-   `/health` actually works. **Already unblocked** — works with
-   today's temporary signing key.
+4. ~~Install the CI-built APK... and confirm the round trip to
+   `/health` actually works~~ — **done, confirmed 2026-08-13**: the
+   app reached `GusteauProxyStack` and got back
+   `{"status":"ok","service":"gusteau-inference-proxy",...}`. Phone →
+   API Gateway → Lambda is live end to end, on today's temporary
+   signing key.
 5. Run the install-and-restore test on a real device — iteration 0's
    one requirement that genuinely can't be done in CI.
 6. Once CloudShell is reachable again: generate the real keystore,
