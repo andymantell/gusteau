@@ -12,3 +12,9 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Exception: temporary until the real CloudShell-generated keystore is
+# in place (blocked on CloudShell access — see ci-cd.md, "Android
+# signing"). Checked in with a fixed, non-secret password so every CI
+# build shares one identity, matching exercise-app's same workaround.
+!app/sideload.keystore.jks

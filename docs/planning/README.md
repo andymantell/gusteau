@@ -67,21 +67,35 @@ built:
 
 1. From AWS CloudShell: deploy `infra/github-oidc.yaml`, and generate
    the Android signing keystore. Both are one-time — see `ci-cd.md`.
+   **Blocked as of 2026-08-13** — CloudShell isn't accepting the owner
+   in. CI is unblocked in the meantime by a temporary checked-in
+   keystore (see `decisions.md`, same date); `deploy.yml` still needs
+   the real CloudShell bootstrap, since that role can't be created any
+   other way.
 2. In the GitHub repo settings: create a `production` Environment with
    a required reviewer (so deploys are an approval tap from the mobile
    app), and set the variables/secrets `ci-cd.md`'s "Secrets and
    variables inventory" lists (`AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`,
-   `GUSTEAU_BUDGET_ALERT_EMAIL`, the four `ANDROID_KEYSTORE_*`/
-   `ANDROID_KEY_*` secrets).
+   `GUSTEAU_BUDGET_ALERT_EMAIL`). The four `ANDROID_KEYSTORE_*`/
+   `ANDROID_KEY_*` secrets are optional for now — CI falls back to the
+   temporary keystore without them — but still needed once step 1
+   unblocks, to retire it.
 3. Push to `main` to trigger the first `deploy.yml` run, then fetch
    the real API key value from the AWS console (the stack only outputs
    its *ID* — deploy logs are public) and paste it, with the API URL,
    into the app's connection screen once installed.
 4. Install the CI-built APK (a run artifact from `ci.yml` on `main`,
    or a tagged `release.yml` build) and confirm the round trip to
-   `/health` actually works.
+   `/health` actually works. **Already unblocked** — works with
+   today's temporary signing key.
 5. Run the install-and-restore test on a real device — iteration 0's
    one requirement that genuinely can't be done in CI.
+6. Once CloudShell is reachable again: generate the real keystore,
+   set the four Android secrets, delete
+   `android/app/sideload.keystore.jks`, and push — **before real data
+   is on the device**, since this swap is itself a signing-identity
+   change that would otherwise force a data-losing reinstall. See
+   `ci-cd.md`, "Android signing".
 
 Iteration 1 (real Bedrock suggestions, replacing the `/health` stub)
 starts once the above is confirmed working.

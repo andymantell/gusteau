@@ -716,3 +716,49 @@ Generating the key in CloudShell rather than in this planning session
 or a build pipeline keeps private key material somewhere the owner
 controls, which matters more than the convenience of having it
 generated for them.
+
+*(Temporarily stood in for 2026-08-13 — CloudShell wasn't reachable
+from the phone in the moment CI needed a working key. See "Temporary
+checked-in sideload keystore" below.)*
+
+## 2026-08-13 — Temporary checked-in sideload keystore, pending real CloudShell key
+
+**Decided:** unblock CI now with a keystore generated locally and
+**checked into the repo** (`android/app/sideload.keystore.jks`, fixed
+non-secret password), rather than waiting on CloudShell access. This
+mirrors the shortcut already taken in another personal project
+([`exercise-app`](https://github.com/andymantell/exercise-app)), whose
+`build.gradle.kts` comment independently documents the same root
+cause: CI runners are stateless, so without *some* persistent key
+every build regenerates a fresh random debug key and Android refuses
+to install it as an upgrade over the last one ("App not installed").
+
+`build.gradle.kts` now tries three signing sources in order: the real
+`key.properties`/GitHub-secrets key (unset), the checked-in sideload
+keystore (active now), then debug signing (local dev with neither).
+`ci.yml`/`release.yml`'s signing step writes `key.properties` only if
+all four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*` secrets are set, doing
+nothing (falling through to the sideload key) if none are, and failing
+loudly on a partial set as a real misconfiguration.
+
+**Follow-up owed, tracked in `iterations.md`'s iteration 0 checklist:**
+once CloudShell is reachable again, generate the real keystore there,
+set the four secrets, and delete `sideload.keystore.jks` — at which
+point `build.gradle.kts` automatically prefers the real key without
+further code changes. **This must happen before any real user-facing
+data accumulates on a device**, since every signing-key change forces
+an uninstall (destroying the local database) — the exact failure mode
+this whole keystore story exists to avoid. Fine to defer while the app
+is a connection-test screen with nothing worth losing yet.
+
+**Why accepted despite the plan's own "generate in CloudShell, keep
+private key material owner-controlled" stance above:** unlike
+`exercise-app`, Gusteau's roadmap involves real payment and supermarket
+account credentials later, so a public signing key is a real (if
+narrow) risk long-term — a leaked/forgeable identity could sign a
+build Android would accept as a legitimate update. But it's an
+accepted, explicitly time-boxed exception, not a reversal: blocked
+entirely on CloudShell access, which is an environmental problem
+(reported as not letting the owner in), not a design one. Shipping
+nothing until that clears would leave the whole pipeline red for no
+security benefit, since there is nothing sensitive on the device yet.

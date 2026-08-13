@@ -7,20 +7,29 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Release signing. key.properties (and the keystore it points at) are
-// never committed — see android/.gitignore — and only exist locally if
-// the owner has generated them, or in CI via the ANDROID_KEYSTORE_*
-// secrets that ci.yml writes out before this build runs. See
-// docs/planning/ci-cd.md, "Android signing".
+// Release signing, in priority order:
 //
-// Falls back to debug signing when key.properties is absent, so
-// `flutter run`/`flutter build apk` still work for local development
-// without needing the real keystore.
+// 1. key.properties (never committed — see android/.gitignore) pointing
+//    at the real, CloudShell-generated keystore. Exists locally only if
+//    the owner has generated it, or in CI via the ANDROID_KEYSTORE_*
+//    secrets that ci.yml/release.yml write out before this build runs.
+//    This is the permanent path — see docs/planning/ci-cd.md, "Android
+//    signing".
+// 2. sideload.keystore.jks, checked into the repo with a fixed,
+//    non-secret password. TEMPORARY: stands in for #1 until the owner
+//    can reach AWS CloudShell to generate the real keystore (blocked as
+//    of this commit — see ci-cd.md). Every build using it shares one
+//    identity, which is the only property that actually matters for
+//    upgrades to install cleanly; the password being public is an
+//    accepted, temporary risk tracked in ci-cd.md.
+// 3. Neither present (local dev without either set up) — falls back to
+//    debug signing so `flutter run`/`flutter build apk` still work.
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+val sideloadKeystoreFile = file("sideload.keystore.jks")
 
 android {
     namespace = "com.gusteau.gusteau"
@@ -58,16 +67,23 @@ android {
                 storeFile = keystoreProperties["storeFile"]?.let { rootProject.file(it) }
                 storePassword = keystoreProperties["storePassword"] as String
             }
+        } else if (sideloadKeystoreFile.exists()) {
+            create("release") {
+                storeFile = sideloadKeystoreFile
+                storePassword = "sideload123"
+                keyAlias = "sideload"
+                keyPassword = "sideload123"
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (keystorePropertiesFile.exists() || sideloadKeystoreFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                // No real keystore available (local dev without one
-                // generated yet) — debug signing keeps the build
+                // Neither the real nor the temporary sideload keystore
+                // is available — debug signing keeps local builds
                 // working rather than failing outright.
                 signingConfigs.getByName("debug")
             }

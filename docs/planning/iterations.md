@@ -35,6 +35,13 @@ to a running app. Full design in [`ci-cd.md`](./ci-cd.md).
   browser, same place as the OIDC bootstrap), store it base64 in
   secrets, and **download a copy somewhere durable** — losing it means
   never being able to upgrade in place (see `ci-cd.md`).
+  **Outstanding as of 2026-08-13:** CloudShell wasn't reachable, so CI
+  runs on a temporary checked-in `sideload.keystore.jks` instead (see
+  `decisions.md`, same date). **To do next, once CloudShell access is
+  back:** generate the real keystore there, set the four secrets,
+  delete the sideload keystore — before any real data is on the
+  device, since this switch is itself a signing-identity change with
+  the same uninstall-and-lose-data consequence described above.
 - Flutter app skeleton with the **local SQLite layer** (Drift or
   equivalent) and migration tooling — this is the system of record, so
   it gets set up properly on day one: per-version fixture databases

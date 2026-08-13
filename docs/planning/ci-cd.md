@@ -266,9 +266,19 @@ touches nothing live.
 Release APKs must be signed with a keystore generated once
 (`keytool`), then stored base64-encoded in GitHub secrets.
 
-**Generate it in AWS CloudShell** — the same phone-browser terminal
-used for the OIDC bootstrap, so no PC is needed and the key never
-passes through anyone else's hands:
+**Status: running on a temporary substitute.** CloudShell wasn't
+reachable when CI first needed a working key (see `decisions.md`,
+2026-08-13), so `android/app/sideload.keystore.jks` — generated
+locally, checked into the repo, fixed non-secret password — stands in
+for now. `build.gradle.kts` prefers the real `key.properties`/secrets
+key automatically the moment it exists, so switching over needs no
+code change, only the steps below plus deleting the sideload file. Do
+this **before real data accumulates on the device** — see the
+consequence noted below.
+
+**Generate the real one in AWS CloudShell** — the same phone-browser
+terminal used for the OIDC bootstrap, so no PC is needed and the key
+never passes through anyone else's hands:
 
 ```bash
 sudo dnf install -y java-17-amazon-corretto-headless   # keytool
@@ -285,12 +295,21 @@ environment is deliberate: private key material should be created
 where the owner controls it, and CloudShell is already open for the
 OIDC step.
 
+**Once it exists:** set the four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*`
+repository secrets from it (see the inventory table below), delete
+`android/app/sideload.keystore.jks` and its `.gitignore` exception, and
+push. The next build silently switches to the real key — `main`'s
+history from that point on carries only one real signing identity.
+
 **This interacts with the backup story in a way that isn't obvious:**
 Android identifies an app by its signing certificate. Lose the
 keystore and you cannot ship an upgrade over an existing install — the
 new build reads as a different app, so it must be uninstalled first,
 **destroying the local database**. Auto Backup restore is also tied to
-the signing identity, so the backup won't save you either.
+the signing identity, so the backup won't save you either. **This is
+exactly what switching away from the sideload keystore does too** — it
+changes the signing identity — so do it while there's still nothing on
+the device worth losing, not after weeks of real use.
 
 So the keystore joins the list of things whose loss is expensive, and
 belongs wherever the JSON export escape hatch is kept — see

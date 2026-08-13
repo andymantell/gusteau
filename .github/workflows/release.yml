@@ -91,32 +91,45 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        # See ci.yml's identical check: fails loudly up front rather than
-        # letting Gradle report an empty keystore as an opaque
-        # KeytoolException minutes into the build.
+        # See ci.yml's identical check. If the real signing secrets are
+        # all set, writes key.properties so build.gradle.kts uses them.
+        # If none are set, writes nothing and build.gradle.kts falls
+        # through to the checked-in sideload.keystore.jks (temporary —
+        # see ci-cd.md, "Android signing"). A *partial* set is a real
+        # misconfiguration, not the expected not-set-up-yet state, so
+        # that still fails loudly.
         run: |
           set -euo pipefail
 
+          vars=(ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD)
+          set_count=0
           missing=()
-          for var in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-            if [ -z "${!var:-}" ]; then
+          for var in "${vars[@]}"; do
+            if [ -n "${!var:-}" ]; then
+              set_count=$((set_count + 1))
+            else
               missing+=("$var")
             fi
           done
-          if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error::Android signing secrets not set: ${missing[*]}." \
-                 "Generate the keystore from CloudShell and add these as" \
-                 "repository secrets first — see docs/planning/ci-cd.md."
-            exit 1
-          fi
 
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/gusteau-release.jks
-          cat > android/key.properties <<KEYPROPS
+          if [ "$set_count" -eq 0 ]; then
+            echo "Android signing secrets not set — using the checked-in" \
+                 "sideload keystore. See docs/planning/ci-cd.md, 'Android signing'."
+          elif [ "$set_count" -eq "${#vars[@]}" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/gusteau-release.jks
+            cat > android/key.properties <<KEYPROPS
           storePassword=$ANDROID_KEYSTORE_PASSWORD
           keyPassword=$ANDROID_KEY_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=app/gusteau-release.jks
           KEYPROPS
+            echo "Using the real signing key from repository secrets."
+          else
+            echo "::error::Android signing secrets partially set (missing:" \
+                 "${missing[*]}). Set all four or none — see" \
+                 "docs/planning/ci-cd.md."
+            exit 1
+          fi
 
       - name: Build signed release APK
         working-directory: app
