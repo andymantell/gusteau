@@ -794,3 +794,36 @@ first.
 they're not derivable from the org/repo name strings alone, and
 getting them wrong fails exactly the same way, with no error message
 pointing at why.
+
+## 2026-08-13 — `deploy.yml` must export `AWS_REGION`, not just `CDK_DEFAULT_REGION`
+
+**Decided:** the OIDC-exchange step in `deploy.yml` now writes
+`AWS_REGION=eu-west-2` to `$GITHUB_ENV` alongside `CDK_DEFAULT_REGION`,
+so it's available to every later step, not just the one where it was
+originally computed.
+
+**Why this was necessary:** after the OIDC trust-policy fix above, the
+next deploy attempt succeeded at assuming the role but then failed —
+`cdk deploy` tried to check the bootstrap version and assume the CDK
+lookup role in **`us-east-1`**, not `eu-west-2`, despite
+`AWS_REGION`/`CDK_DEFAULT_REGION` being set correctly at the repo-variable
+level. Root cause: the OIDC step's `env:` block scoped `AWS_REGION` to
+itself only — it used that value to compute `CDK_DEFAULT_REGION`
+for `$GITHUB_ENV`, but never exported `AWS_REGION` itself.
+`CDK_DEFAULT_REGION` is read only by the **CDK app** (`app.py`,
+constructing `cdk.Environment`); the **CDK CLI's own** AWS SDK calls —
+bootstrap-version check, lookup-role assumption — read plain
+`AWS_REGION`/`AWS_DEFAULT_REGION` instead, and the CLI actually
+**overwrites** `CDK_DEFAULT_REGION` from its own resolved region
+before invoking the app. With `AWS_REGION` unset for later steps, the
+SDK fell back to `us-east-1`, and that overwrite dragged the app's
+synthesized stack there too — so the region mismatch wasn't confined
+to the CLI's own calls, it silently redirected the whole deploy.
+
+**Confirmed by evidence, not guessed:** the failure's ARNs
+(`cdk-hnb659fds-lookup-role-...-us-east-1`,
+`arn:aws:cloudformation:us-east-1:...:stack/GusteauProxyStack/*`) named
+the wrong region explicitly. After the fix, the next run's step-env
+dump showed both `AWS_REGION: eu-west-2` and `CDK_DEFAULT_REGION:
+eu-west-2`, and the deploy succeeded — `GusteauProxyStack` created in
+`eu-west-2` as intended, all 19 resources, ~47s.

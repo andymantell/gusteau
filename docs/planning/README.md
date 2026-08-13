@@ -61,29 +61,36 @@ Lambda `/health` stub + a monthly AWS Budget guard — real Bedrock
 calls land in iteration 1), and the three GitHub Actions workflows
 (`ci.yml`, `deploy.yml`, `release.yml`).
 
-**What's left before it's actually live is manual, on the owner's
-side, and can only be done by them** — everything CI-buildable is
-built:
+**Deploy infra succeeded on 2026-08-13** — `GusteauProxyStack` is live
+in `eu-west-2`:
+`ApiUrl = https://eenk57002b.execute-api.eu-west-2.amazonaws.com/prod/`,
+`ApiKeyId = nzuexor6yb`. Getting there needed two real fixes along the
+way, both now recorded in `decisions.md`/`ci-cd.md`: `infra/github-oidc.yaml`'s
+trust policy had to move to GitHub's newer immutable subject-claim
+format (`repo:owner@id/repo@id:...`, not `repo:owner/repo:...`), and
+`deploy.yml` had to export `AWS_REGION` (not just `CDK_DEFAULT_REGION`)
+to every step, or the CDK CLI's own AWS SDK calls silently defaulted to
+`us-east-1`.
 
-1. From AWS CloudShell: deploy `infra/github-oidc.yaml`, and generate
-   the Android signing keystore. Both are one-time — see `ci-cd.md`.
-   **Blocked as of 2026-08-13** — CloudShell isn't accepting the owner
-   in. CI is unblocked in the meantime by a temporary checked-in
-   keystore (see `decisions.md`, same date); `deploy.yml` still needs
-   the real CloudShell bootstrap, since that role can't be created any
-   other way.
-2. In the GitHub repo settings: create a `production` Environment with
-   a required reviewer (so deploys are an approval tap from the mobile
-   app), and set the variables/secrets `ci-cd.md`'s "Secrets and
-   variables inventory" lists (`AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`,
-   `GUSTEAU_BUDGET_ALERT_EMAIL`). The four `ANDROID_KEYSTORE_*`/
-   `ANDROID_KEY_*` secrets are optional for now — CI falls back to the
-   temporary keystore without them — but still needed once step 1
-   unblocks, to retire it.
-3. Push to `main` to trigger the first `deploy.yml` run, then fetch
-   the real API key value from the AWS console (the stack only outputs
-   its *ID* — deploy logs are public) and paste it, with the API URL,
-   into the app's connection screen once installed.
+**What's left is manual, on the owner's side:**
+
+1. ~~From AWS CloudShell: deploy `infra/github-oidc.yaml`~~ — **done**,
+   deployed by hand via the CloudFormation console instead (CloudShell
+   wasn't accepting the owner in). Generating the **Android signing
+   keystore in CloudShell** is still outstanding — CI runs on a
+   temporary checked-in keystore for now (see `decisions.md`,
+   2026-08-13); do this before real data is on the device.
+2. ~~In the GitHub repo settings: create a `production` Environment...
+   set the variables/secrets~~ — **done**, confirmed working (the
+   deploy above went through the approval gate and read
+   `AWS_DEPLOY_ROLE_ARN`/`AWS_REGION`/`GUSTEAU_BUDGET_ALERT_EMAIL`
+   correctly). The four `ANDROID_KEYSTORE_*`/`ANDROID_KEY_*` secrets
+   are still outstanding, tied to step 1 above.
+3. ~~Push to `main` to trigger the first `deploy.yml` run~~ — **done**.
+   Still to do: fetch the real API key value from the AWS console
+   (API Gateway → API Keys → `nzuexor6yb` → Show — the stack only
+   outputs the *ID*, deploy logs are public) and paste it, with the
+   API URL above, into the app's connection screen once installed.
 4. Install the CI-built APK (a run artifact from `ci.yml` on `main`,
    or a tagged `release.yml` build) and confirm the round trip to
    `/health` actually works. **Already unblocked** — works with
