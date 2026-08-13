@@ -64,6 +64,59 @@ def test_health_route_requires_api_key() -> None:
     )
 
 
+def test_generate_route_requires_api_key() -> None:
+    template = _synth_template()
+    template.has_resource_properties(
+        "AWS::ApiGateway::Method",
+        {
+            "HttpMethod": "POST",
+            "ApiKeyRequired": True,
+        },
+    )
+
+
+def test_bedrock_invoke_permission_scoped_not_wildcard() -> None:
+    """The Lambda can call bedrock:InvokeModel, but never on a bare "*"
+    resource — see architecture.md, "Security posture"."""
+    template = _synth_template()
+    policies = template.find_resources(
+        "AWS::IAM::Policy",
+        {
+            "Properties": {
+                "PolicyDocument": {
+                    "Statement": Match.array_with(
+                        [
+                            Match.object_like(
+                                {
+                                    "Action": "bedrock:InvokeModel",
+                                    "Effect": "Allow",
+                                }
+                            )
+                        ]
+                    )
+                }
+            }
+        },
+    )
+    assert policies, "expected a bedrock:InvokeModel policy statement"
+
+    for policy in policies.values():
+        for statement in policy["Properties"]["PolicyDocument"]["Statement"]:
+            if statement.get("Action") != "bedrock:InvokeModel":
+                continue
+            resources = statement["Resource"]
+            resources = resources if isinstance(resources, list) else [resources]
+            assert "*" not in resources, "bedrock:InvokeModel must not be granted on a bare '*'"
+
+
+def test_lambda_has_bedrock_model_id_configured() -> None:
+    template = _synth_template()
+    template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {"Environment": {"Variables": Match.object_like({"BEDROCK_MODEL_ID": Match.any_value()})}},
+    )
+
+
 def test_usage_plan_has_monthly_quota() -> None:
     template = _synth_template()
     template.has_resource_properties(

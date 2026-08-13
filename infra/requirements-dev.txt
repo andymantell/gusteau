@@ -1,3 +1,9 @@
 -r requirements.txt
 pytest==8.4.2
 ruff==0.14.4
+# Test-only: exercises the inference proxy Lambda's handler code
+# directly (test_inference_proxy_handler.py). Not a production
+# dependency — the real Lambda runtime provides boto3/botocore
+# preinstalled, so it's deliberately not bundled into the deployment
+# asset (see gusteau_infra/lambda/inference_proxy/).
+boto3==1.43.71

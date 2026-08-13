@@ -20,6 +20,14 @@ env = cdk.Environment(
     region=os.environ.get("CDK_DEFAULT_REGION", "eu-west-2"),
 )
 
+# Only passed through if set, so ProxyStack's own default (a placeholder
+# pending the model-tier spike — see proxy_stack.py and
+# docs/planning/decisions.md) stays the single source of truth until the
+# owner overrides it.
+proxy_kwargs = {}
+if "GUSTEAU_BEDROCK_MODEL_ID" in os.environ:
+    proxy_kwargs["bedrock_model_id"] = os.environ["GUSTEAU_BEDROCK_MODEL_ID"]
+
 ProxyStack(
     app,
     "GusteauProxyStack",
@@ -32,6 +40,7 @@ ProxyStack(
     # Not committed anywhere — supplied at deploy time only. If unset, the
     # budget is still created but has no notification subscriber.
     budget_alert_email=os.environ.get("GUSTEAU_BUDGET_ALERT_EMAIL"),
+    **proxy_kwargs,
 )
 
 app.synth()
