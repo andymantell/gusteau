@@ -44,7 +44,7 @@ class ProxyStack(Stack):
         # works as a modelId; some models need a full inference-profile
         # ARN instead. Confirm the exact string works with `converse()`
         # in the deploy region before relying on it.
-        bedrock_model_id: str = "anthropic.claude-haiku-4-5-20251001-v1:0",
+        bedrock_model_id: str = "amazon.nova-pro-v1:0",
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
