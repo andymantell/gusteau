@@ -851,3 +851,37 @@ test what it's meant to. Tracked in `README.md`'s status section
 alongside the (separately deferred, for a different reason) real
 signing-keystore swap — both share the same shape: safe to defer only
 because nothing real is on the device yet.
+
+## 2026-08-14 — Model-tier spike starts on Amazon Nova, not Claude
+
+**Decided:** run iteration 1's model-tier spike (see `architecture.md`,
+"Recipe suggestion generation") against Amazon Nova Pro first, rather
+than Claude on Bedrock as originally assumed, and set
+`bedrock_model_id`'s placeholder default to `amazon.nova-pro-v1:0`.
+
+**Why:** requesting Anthropic model access in the Bedrock console hit
+an "account not authorized" error at the use-case-submission step —
+AWS Marketplace's agreement-acceptance flow, not an IAM permissions
+gap (confirmed: the owner was logged in as the account root user).
+The likely cause is a mismatch between the account's UK billing
+address and the owner's temporary US (Florida) location while
+travelling — plausible given known Marketplace location checks, but
+not something confirmable from here. Amazon Nova is first-party (AWS
+is both platform and model vendor), so it skips the Marketplace EULA
+step entirely and isn't affected either way.
+
+**Cost is a non-factor at this app's real usage volume**: at roughly
+40 generate calls/month and ~2–3k tokens per call, the difference
+between Nova Pro, Nova Lite, and Claude Haiku 4.5 comes out to cents,
+not pounds — all comfortably inside the £15/month budget regardless
+of which tier wins the spike. Picked Nova **Pro** specifically (not
+the cheaper Lite/Micro tiers) because the spike's actual question is
+quality — does a generic model produce well-formed, house-style
+recipes — and pinching pennies on a near-zero bill isn't worth
+risking a weaker tier's writing quality.
+
+**Not a permanent commitment to Nova over Claude:** `bedrock_model_id`
+is a one-line config value specifically so this is cheap to revisit.
+Once back on a UK connection, worth retrying Claude access — Nova is
+what unblocks the spike *now*, not a verdict on which model is
+better.
