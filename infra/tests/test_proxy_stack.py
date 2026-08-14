@@ -117,6 +117,16 @@ def test_lambda_has_bedrock_model_id_configured() -> None:
     )
 
 
+def test_lambda_has_bedrock_region_configured() -> None:
+    # Deliberately can differ from the stack's own deploy region — see
+    # proxy_stack.py's bedrock_region parameter.
+    template = _synth_template()
+    template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {"Environment": {"Variables": Match.object_like({"BEDROCK_REGION": Match.any_value()})}},
+    )
+
+
 def test_usage_plan_has_monthly_quota() -> None:
     template = _synth_template()
     template.has_resource_properties(

@@ -30,6 +30,7 @@ import handler  # noqa: E402 — must follow the sys.path.insert above
 @pytest.fixture(autouse=True)
 def _model_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BEDROCK_MODEL_ID", "test-model-id")
+    monkeypatch.setenv("BEDROCK_REGION", "eu-west-1")
 
 
 @pytest.fixture(autouse=True)

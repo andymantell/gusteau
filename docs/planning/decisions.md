@@ -885,3 +885,46 @@ is a one-line config value specifically so this is cheap to revisit.
 Once back on a UK connection, worth retrying Claude access — Nova is
 what unblocks the spike *now*, not a verdict on which model is
 better.
+
+## 2026-08-14 — Bedrock calls target eu-west-1, not the stack's own eu-west-2
+
+**Decided:** added a `bedrock_region` parameter to `ProxyStack`,
+defaulting to `eu-west-1`, and pointed the Lambda's Bedrock client at
+it explicitly (`boto3.client("bedrock-runtime", region_name=...)`)
+rather than letting it default to the Lambda's own deploy region. IAM
+updated to match: the inference-profile resource is scoped to
+`bedrock_region`; the foundation-model resource is wildcarded across
+region (`bedrock:eu-west-2` stays reserved for the stack's own
+resources — API Gateway, the Lambda, its log group).
+
+**Why:** two real errors, in order, ruled out the alternatives:
+
+1. `amazon.nova-pro-v1:0` (the bare model ID) →
+   `ValidationException: Operation not allowed`. Nova Pro has no
+   in-region on-demand support anywhere in Europe — confirmed via
+   search, AWS's own docs pages are unreachable from this sandbox
+   (`docs.aws.amazon.com`/`aws.amazon.com` are blocked by the egress
+   proxy). It always needs a cross-region inference profile.
+2. `eu.amazon.nova-pro-v1:0` (the EU cross-region profile ID, correct
+   syntax) from **eu-west-2** →
+   `ValidationException: The provided model identifier is invalid.`
+   The owner confirmed directly in the Bedrock console
+   (Cross-region inference list, eu-west-2): Nova Pro's EU profile
+   isn't offered from that region at all. Switching the console's
+   region selector to **eu-west-1** and checking the same list, it
+   is — also confirmed directly, not just via search.
+
+**Why the foundation-model IAM resource is wildcarded on region, not
+pinned to eu-west-1 like everything else:** a geographic cross-region
+profile fans a single request out to whichever region in its
+geography actually serves it at the time — Bedrock evaluates
+`InvokeModel` permission against *that* region's own foundation-model
+ARN, not the ARN of the region the caller is in. Pinning this to
+`eu-west-1` would work today and break unpredictably the day AWS's
+load balancer picks a different EU region for the same request.
+AWS's own example IAM policies for cross-region inference wildcard
+this for exactly that reason.
+
+**Confirmed by evidence at each step, including from the owner
+directly** — not assumed — consistent with how every other deploy
+bug this project has hit got root-caused.

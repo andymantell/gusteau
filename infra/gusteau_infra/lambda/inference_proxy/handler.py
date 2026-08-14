@@ -38,7 +38,11 @@ _bedrock_client: Any = None
 def _bedrock() -> Any:
     global _bedrock_client
     if _bedrock_client is None:
-        _bedrock_client = boto3.client("bedrock-runtime")
+        # Explicit region, not the Lambda's own — BEDROCK_REGION may
+        # (and currently does) point somewhere other than where this
+        # function is deployed. See proxy_stack.py's bedrock_region
+        # parameter for why.
+        _bedrock_client = boto3.client("bedrock-runtime", region_name=os.environ["BEDROCK_REGION"])
     return _bedrock_client
 
 

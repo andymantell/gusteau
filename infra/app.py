@@ -27,6 +27,8 @@ env = cdk.Environment(
 proxy_kwargs = {}
 if "GUSTEAU_BEDROCK_MODEL_ID" in os.environ:
     proxy_kwargs["bedrock_model_id"] = os.environ["GUSTEAU_BEDROCK_MODEL_ID"]
+if "GUSTEAU_BEDROCK_REGION" in os.environ:
+    proxy_kwargs["bedrock_region"] = os.environ["GUSTEAU_BEDROCK_REGION"]
 
 ProxyStack(
     app,

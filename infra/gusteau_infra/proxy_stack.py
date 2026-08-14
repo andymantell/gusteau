@@ -46,6 +46,14 @@ class ProxyStack(Stack):
         # `<region-group>.` cross-region inference profile prefix
         # instead — see decisions.md for the error that led here.
         bedrock_model_id: str = "eu.amazon.nova-pro-v1:0",
+        # The region the Lambda's Bedrock *client* targets — separate
+        # from this stack's own deploy region (self.region, eu-west-2).
+        # Nova Pro has no in-region on-demand support anywhere in
+        # Europe, and its EU cross-region profile's supported source
+        # regions don't include eu-west-2 — confirmed in the Bedrock
+        # console's own "Cross-region inference" list, not just docs.
+        # eu-west-1 is. See decisions.md.
+        bedrock_region: str = "eu-west-1",
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -80,20 +88,32 @@ class ProxyStack(Stack):
             ),
             environment={
                 "BEDROCK_MODEL_ID": bedrock_model_id,
+                "BEDROCK_REGION": bedrock_region,
             },
         )
-        # Least-privilege IAM: scoped to InvokeModel on foundation
-        # models and inference profiles in this region only — not a
-        # wildcard across actions/resources, but also not pinned to one
-        # exact model ARN yet, since bedrock_model_id above is still a
-        # placeholder pending the spike. Narrow this further once that
-        # settles. See architecture.md, "Security posture".
+        # Least-privilege IAM: scoped to InvokeModel only, and to the
+        # foundation-model/inference-profile resource types only — not
+        # a wildcard across actions/resources, but also not pinned to
+        # one exact model ARN yet, since bedrock_model_id above is
+        # still a placeholder pending the spike. Narrow this further
+        # once that settles. See architecture.md, "Security posture".
+        #
+        # The inference-profile resource is scoped to bedrock_region
+        # (where the Lambda's Bedrock client actually calls from — see
+        # that parameter's comment above), not self.region. The
+        # foundation-model resource can't be region-scoped at all: a
+        # geographic cross-region profile fans a single request out to
+        # whichever region in its geography actually serves it, and
+        # Bedrock evaluates InvokeModel permission against *that*
+        # region's own foundation-model ARN, not the caller's — AWS's
+        # own example policies for cross-region inference wildcard the
+        # region here for exactly this reason.
         proxy_fn.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
                 resources=[
-                    f"arn:{self.partition}:bedrock:{self.region}::foundation-model/*",
-                    f"arn:{self.partition}:bedrock:{self.region}:{self.account}:inference-profile/*",
+                    f"arn:{self.partition}:bedrock:*::foundation-model/*",
+                    f"arn:{self.partition}:bedrock:{bedrock_region}:{self.account}:inference-profile/*",
                 ],
             )
         )
