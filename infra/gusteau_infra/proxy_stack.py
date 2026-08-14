@@ -40,11 +40,12 @@ class ProxyStack(Stack):
         # Placeholder pending the model-tier spike in decisions.md
         # ("Validate 'generic model is good enough' before building on
         # it") — a single config value, trivially changed once the
-        # owner runs it. Not a Bedrock model *name* on its own always
-        # works as a modelId; some models need a full inference-profile
-        # ARN instead. Confirm the exact string works with `converse()`
-        # in the deploy region before relying on it.
-        bedrock_model_id: str = "amazon.nova-pro-v1:0",
+        # owner runs it. Not a bare Bedrock model name — Nova (like some
+        # other models) rejects direct on-demand invocation with
+        # "ValidationException: Operation not allowed" and needs the
+        # `<region-group>.` cross-region inference profile prefix
+        # instead — see decisions.md for the error that led here.
+        bedrock_model_id: str = "eu.amazon.nova-pro-v1:0",
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
